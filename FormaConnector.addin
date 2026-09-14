@@ -1,0 +1,11 @@
+<?xml version="1.0" encoding="utf-8"?>
+<RevitAddIns>
+  <AddIn Type="Application">
+    <Name>Forma Revit Connector</Name>
+    <Assembly>%APPDATA%\Autodesk\Revit\Addins\2025\FormaConnector\Forma.RevitConnector.dll</Assembly>
+    <AddInId>7B1CB781-44D6-4EE8-A091-63F7377E3A61</AddInId>
+    <FullClassName>Forma.RevitConnector.FormaApplication</FullClassName>
+    <VendorId>FORMA</VendorId>
+    <VendorDescription>Local connector for the Forma Revit workflow workspace.</VendorDescription>
+  </AddIn>
+</RevitAddIns>

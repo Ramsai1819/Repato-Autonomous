@@ -1,0 +1,41 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <TargetFramework>net8.0-windows</TargetFramework>
+    <UseWPF>true</UseWPF>
+    <Nullable>enable</Nullable>
+    <ImplicitUsings>enable</ImplicitUsings>
+
+    <AssemblyName>Repato.Revit</AssemblyName>
+    <RootNamespace>Repato.Revit</RootNamespace>
+
+    <RevitInstallDir Condition="'$(RevitInstallDir)' == ''">E:\revit\Revit 2025</RevitInstallDir>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <Reference Include="RevitAPI">
+      <HintPath>$(RevitInstallDir)\RevitAPI.dll</HintPath>
+      <Private>false</Private>
+    </Reference>
+
+    <Reference Include="RevitAPIUI">
+      <HintPath>$(RevitInstallDir)\RevitAPIUI.dll</HintPath>
+      <Private>false</Private>
+    </Reference>
+  </ItemGroup>
+
+  <ItemGroup>
+    <Compile Remove="ConnectorModels.cs" />
+    <Compile Remove="ConnectorServer.cs" />
+    <Compile Remove="FormaEventHandler.cs" />
+  </ItemGroup>
+
+  <Target Name="CheckRevitApi" BeforeTargets="ResolveReferences">
+    <Error Condition="!Exists('$(RevitInstallDir)\RevitAPI.dll')"
+           Text="RevitAPI.dll was not found in $(RevitInstallDir)." />
+
+    <Error Condition="!Exists('$(RevitInstallDir)\RevitAPIUI.dll')"
+           Text="RevitAPIUI.dll was not found in $(RevitInstallDir)." />
+  </Target>
+
+</Project>

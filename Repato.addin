@@ -1,0 +1,11 @@
+<?xml version="1.0" encoding="utf-8"?>
+<RevitAddIns>
+  <AddIn Type="Application">
+    <Name>Repato</Name>
+    <Assembly>%APPDATA%\Autodesk\Revit\Addins\2025\Repato\Repato.Revit.dll</Assembly>
+    <AddInId>0E9776F0-E788-4A80-BD33-9C838A28C3D0</AddInId>
+    <FullClassName>Repato.Revit.RepatoApplication</FullClassName>
+    <VendorId>RPT0</VendorId>
+    <VendorDescription>Repato — Revit workflow automation tools.</VendorDescription>
+  </AddIn>
+</RevitAddIns>
