@@ -8,6 +8,7 @@
 
     <AssemblyName>Repato.Revit</AssemblyName>
     <RootNamespace>Repato.Revit</RootNamespace>
+    <PlatformTarget>x64</PlatformTarget>
 
     <RevitInstallDir Condition="'$(RevitInstallDir)' == ''">E:\revit\Revit 2025</RevitInstallDir>
   </PropertyGroup>
