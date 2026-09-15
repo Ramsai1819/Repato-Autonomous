@@ -64,7 +64,7 @@ public sealed class GridResequenceCommand : IExternalCommand
 
         foreach (Autodesk.Revit.DB.Grid grid in selectedGrids)
         {
-            Curve curve = grid
+            Curve? curve = grid
                 .GetCurvesInView(DatumExtentType.ViewSpecific, view)
                 .FirstOrDefault();
 
@@ -160,7 +160,7 @@ public sealed class GridResequenceCommand : IExternalCommand
             // Temporary names prevent Revit duplicate-name errors during swaps.
             foreach (RenameItem item in renames)
             {
-                item.Grid.Name = $"REPATO-TEMP-{item.Grid.Id.IntegerValue}";
+                item.Grid.Name = $"REPATO-TEMP-{item.Grid.Id.Value}";
             }
 
             foreach (RenameItem item in renames)
@@ -409,30 +409,33 @@ public sealed class GridResequenceCommand : IExternalCommand
             _isLetterAxis = isLetterAxis;
         }
 
-        public int Compare(string x, string y)
+        public int Compare(string? x, string? y)
         {
-            if (string.Equals(x, y, StringComparison.OrdinalIgnoreCase))
+            string xValue = x ?? string.Empty;
+            string yValue = y ?? string.Empty;
+
+            if (string.Equals(xValue, yValue, StringComparison.OrdinalIgnoreCase))
             {
                 return 0;
             }
 
             if (_isLetterAxis &&
-                TryLetterNumber(x, out int xLetter) &&
-                TryLetterNumber(y, out int yLetter))
+                TryLetterNumber(xValue, out int xLetter) &&
+                TryLetterNumber(yValue, out int yLetter))
             {
                 return xLetter.CompareTo(yLetter);
             }
 
             if (!_isLetterAxis &&
-                int.TryParse(x, out int xNumber) &&
-                int.TryParse(y, out int yNumber))
+                int.TryParse(xValue, out int xNumber) &&
+                int.TryParse(yValue, out int yNumber))
             {
                 return xNumber.CompareTo(yNumber);
             }
 
             return string.Compare(
-                x,
-                y,
+                xValue,
+                yValue,
                 StringComparison.OrdinalIgnoreCase
             );
         }
@@ -440,10 +443,10 @@ public sealed class GridResequenceCommand : IExternalCommand
 
     private sealed class SecondarySuffixComparer : IComparer<string>
     {
-        public int Compare(string x, string y)
+        public int Compare(string? x, string? y)
         {
-            string xText = (x ?? "").TrimStart('.');
-            string yText = (y ?? "").TrimStart('.');
+            string xText = (x ?? string.Empty).TrimStart('.');
+            string yText = (y ?? string.Empty).TrimStart('.');
 
             if (int.TryParse(xText, out int xNumber) &&
                 int.TryParse(yText, out int yNumber))
