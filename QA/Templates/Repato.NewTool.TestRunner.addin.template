@@ -1,0 +1,5 @@
+<?xml version="1.0" encoding="utf-8"?>
+<RevitAddIns>
+  <AddIn Type="Application"><Name>__TOOL__ QA Startup</Name><Assembly>.\RepatoQA\Repato.Revit.dll</Assembly><AddInId>__UNIQUE_GUID__</AddInId><FullClassName>Repato.Revit.TestRunner.__TOOL__QaApplication</FullClassName><VendorId>RPT0</VendorId></AddIn>
+  <AddIn Type="Command"><Name>__TOOL__ QA Runner</Name><Assembly>.\RepatoQA\Repato.Revit.dll</Assembly><AddInId>__SECOND_UNIQUE_GUID__</AddInId><FullClassName>Repato.Revit.TestRunner.__TOOL__TestCommand</FullClassName><Text>Repato QA - __TOOL__</Text><VendorId>RPT0</VendorId></AddIn>
+</RevitAddIns>

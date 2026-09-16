@@ -1,0 +1,10 @@
+# Copy to QA/Invoke-<Tool>QA.ps1 and replace every __PLACEHOLDER__.
+[CmdletBinding()]
+param([Parameter(Mandatory=$true)][ValidateSet('Install','Run','Verify')][string]$Action,[string]$ReceiptPath,[ValidateRange(30,900)][int]$TimeoutSeconds=900)
+$ErrorActionPreference='Stop';Set-StrictMode -Version Latest
+$repoRoot='C:\Repato-Autonomous\Source';$runsRoot=Join-Path $repoRoot 'QA\TestRuns';$reportsRoot=Join-Path $repoRoot 'QA\Reports'
+. (Join-Path $PSScriptRoot 'Foundation\QaRunner.Foundation.ps1')
+. (Join-Path $PSScriptRoot 'AddinIsolation.ps1')
+$testId='__TEST_ID__';$fixtureId='__FIXTURE_ID__';$requestName='__REQUEST_NAME__.request.json';$environmentVariable='REPATO_QA___TOOL___REQUEST'
+if($Action-eq'Verify'){throw 'Implement the tool-specific report schema verifier before use.'}
+throw 'Template is intentionally non-runnable. Complete install, isolation capture, fixture policy, New-RepatoQaRun, Start-RepatoQaRevit, Wait-RepatoQaResult, and Verify contracts.'

@@ -52,9 +52,8 @@ internal static class LevelScreenshotCapture
         if (files.Length != 1 || new FileInfo(files[0]).Length == 0)
             throw new IOException("Revit did not produce the expected PNG screenshot.");
 
-        report.Screenshots.Add(new ScreenshotEvidence(
-            phase, files[0], TestRunReport.Hash(files[0]),
-            view.Id.Value.ToString(System.Globalization.CultureInfo.InvariantCulture), view.Name));
-        report.Assert("screenshot-" + phase, true, "One nonempty Revit view PNG", files[0]);
+        QaRunnerFoundation.RegisterEvidence(
+            report, phase, files[0],
+            view.Id.Value.ToString(System.Globalization.CultureInfo.InvariantCulture), view.Name);
     }
 }
