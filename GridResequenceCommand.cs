@@ -183,6 +183,60 @@ public sealed class GridResequenceCommand : IExternalCommand
         return Result.Succeeded;
     }
 
+    // QA-only entry point. It uses the same private ordering and rename planner as
+    // Execute, but supplies fixed inputs and no UI. The caller owns rollback.
+    internal static IReadOnlyDictionary<long, string> ApplyQaCase(
+        Document document,
+        View view,
+        IReadOnlyCollection<Autodesk.Revit.DB.Grid> selectedGrids,
+        string verticalDirection,
+        string horizontalDirection,
+        int verticalStart,
+        int horizontalStart)
+    {
+        var verticals = new List<GridPosition>();
+        var horizontals = new List<GridPosition>();
+        foreach (Autodesk.Revit.DB.Grid grid in selectedGrids)
+        {
+            Curve curve = grid.GetCurvesInView(DatumExtentType.ViewSpecific, view).FirstOrDefault()
+                ?? throw new InvalidOperationException($"Grid {grid.Name} is not visible in the active view.");
+            if (curve is not Line line)
+                throw new InvalidOperationException($"Grid {grid.Name} is not straight.");
+            XYZ a = line.GetEndPoint(0);
+            XYZ b = line.GetEndPoint(1);
+            if (Math.Abs(b.X - a.X) >= Math.Abs(b.Y - a.Y))
+                horizontals.Add(new GridPosition(grid, (a.Y + b.Y) / 2.0));
+            else
+                verticals.Add(new GridPosition(grid, (a.X + b.X) / 2.0));
+        }
+        List<GridPosition> orderedVerticals = verticalDirection == "Right to Left"
+            ? verticals.OrderByDescending(x => x.Position).ToList()
+            : verticals.OrderBy(x => x.Position).ToList();
+        List<GridPosition> orderedHorizontals = horizontalDirection == "Top to Bottom"
+            ? horizontals.OrderByDescending(x => x.Position).ToList()
+            : horizontals.OrderBy(x => x.Position).ToList();
+        List<RenameItem> renames = CreateResequenceRenames(orderedVerticals, true, verticalStart)
+            .Concat(CreateResequenceRenames(orderedHorizontals, false, horizontalStart)).ToList();
+        var selectedIds = selectedGrids.Select(grid => grid.Id).ToHashSet();
+        var unselectedNames = new FilteredElementCollector(document).OfClass(typeof(Autodesk.Revit.DB.Grid))
+            .Cast<Autodesk.Revit.DB.Grid>().Where(grid => !selectedIds.Contains(grid.Id))
+            .Select(grid => grid.Name).ToHashSet(StringComparer.OrdinalIgnoreCase);
+        string[] conflicts = renames.Select(item => item.NewName).Where(unselectedNames.Contains)
+            .Distinct(StringComparer.OrdinalIgnoreCase).ToArray();
+        if (conflicts.Length != 0)
+            throw new InvalidOperationException("Target names conflict with unselected grids: " + string.Join(", ", conflicts));
+        using var transaction = new Transaction(document, "Repato QA - Grid Resequence");
+        if (transaction.Start() != TransactionStatus.Started)
+            throw new InvalidOperationException("Could not start resequence transaction.");
+        foreach (RenameItem item in renames)
+            item.Grid.Name = $"REPATO-QA-TEMP-{item.Grid.Id.Value}";
+        foreach (RenameItem item in renames)
+            item.Grid.Name = item.NewName;
+        if (transaction.Commit() != TransactionStatus.Committed)
+            throw new InvalidOperationException("Could not commit resequence transaction.");
+        return renames.ToDictionary(item => item.Grid.Id.Value, item => item.NewName);
+    }
+
     private static List<RenameItem> CreateResequenceRenames(
         List<GridPosition> gridsInPhysicalOrder,
         bool isLetterAxis,

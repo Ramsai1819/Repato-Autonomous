@@ -1,0 +1,10 @@
+{
+  "fixtureId": "GridResequenceEmpty",
+  "sourceSha256": "E03519845562D20901C5F106BABF1A6D7A3F651F45D397F54E0BC70BFEE04601",
+  "requiredGridNames": ["1", "2", "3", "3.2", "4", "A", "A.1", "B", "C"],
+  "layout": {
+    "verticalLeftToRight": ["B", "A.1", "C", "A"],
+    "horizontalBottomToTop": ["2", "3.2", "1", "4", "3"]
+  },
+  "source": "Manually created in the authorized RepatoQA Revit 2025 session as a local non-workshared fixture with no Revit links."
+}

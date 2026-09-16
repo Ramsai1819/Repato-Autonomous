@@ -20,8 +20,13 @@ Reject("offset-unexpected-grid", "GridBubbleOffsetEmpty", [..approved,"X"], 0);
 Reject("offset-duplicate-replaces-grid", "GridBubbleOffsetEmpty", ["A","A","B","C","D","1","2","3"], 0);
 Reject("offset-rejects-links", "GridBubbleOffsetEmpty", approved, 1);
 Reject("default-rejects-links", "CreateLevelsEmpty", [], 1);
-if(passed!=9) throw new Exception("wrong check count");
-Console.WriteLine($"{passed}/9 fixture policy checks passed");
+string[] resequence = ["1","2","3","3.2","4","A","A.1","B","C"];
+Accept("resequence-approved-exact", "GridResequenceEmpty", resequence, 0);
+Reject("resequence-missing-decimal", "GridResequenceEmpty", resequence.Where(n=>n!="3.2").ToArray(), 0);
+Reject("resequence-unexpected-grid", "GridResequenceEmpty", [..resequence,"X"], 0);
+Reject("resequence-links", "GridResequenceEmpty", resequence, 1);
+if(passed!=13) throw new Exception("wrong check count");
+Console.WriteLine($"{passed}/13 fixture policy checks passed");
 '@ | Set-Content (Join-Path $scratch 'Program.cs')
 dotnet run --project (Join-Path $scratch 'PolicyChecks.csproj') --configuration Release --nologo
 if($LASTEXITCODE -ne 0){throw 'Fixture policy harness failed'}

@@ -1,0 +1,3 @@
+$ErrorActionPreference='Stop';$app=Get-Content (Join-Path $PSScriptRoot '..\TestRunner\GridResequenceQaApplication.cs') -Raw;$controller=Get-Content (Join-Path $PSScriptRoot 'Invoke-GridResequenceQA.ps1') -Raw;$manifest=Get-Content (Join-Path $PSScriptRoot 'Repato.GridResequence.TestRunner.addin') -Raw
+foreach($token in @('REPATO_QA_GRID_RESEQUENCE_REQUEST','GridResequenceQaApplication','GridResequenceTestCommand','grid-resequence.request.json')){if(($app+$controller+$manifest) -notmatch [regex]::Escape($token)){throw "Startup contract missing $token"}}
+Write-Host '4 Grid Resequence startup checks passed'

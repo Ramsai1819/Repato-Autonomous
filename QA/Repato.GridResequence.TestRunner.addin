@@ -1,0 +1,18 @@
+<?xml version="1.0" encoding="utf-8"?>
+<RevitAddIns>
+  <AddIn Type="Application">
+    <Name>Repato Grid Resequence QA Startup</Name>
+    <Assembly>.\RepatoQA\Repato.Revit.dll</Assembly>
+    <AddInId>88CBB294-4AC2-4D38-91A0-9E10964E7251</AddInId>
+    <FullClassName>Repato.Revit.TestRunner.GridResequenceQaApplication</FullClassName>
+    <VendorId>RPT0</VendorId>
+  </AddIn>
+  <AddIn Type="Command">
+    <Name>Repato QA Grid Resequence</Name>
+    <Assembly>.\RepatoQA\Repato.Revit.dll</Assembly>
+    <AddInId>57C436DC-B122-4246-A9CE-22648721FD66</AddInId>
+    <FullClassName>Repato.Revit.TestRunner.GridResequenceTestCommand</FullClassName>
+    <Text>Repato QA - Grid Resequence</Text>
+    <VendorId>RPT0</VendorId>
+  </AddIn>
+</RevitAddIns>

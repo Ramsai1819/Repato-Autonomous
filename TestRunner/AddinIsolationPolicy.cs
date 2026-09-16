@@ -110,7 +110,7 @@ public static class AddinIsolationPolicy
                 else
                 {
                     string name = Path.GetFileName(path);
-                if (name.Equals("Repato.CreateLevels.TestRunner.addin", StringComparison.OrdinalIgnoreCase) || name.Equals("Repato.TestRunner.addin", StringComparison.OrdinalIgnoreCase) || name.Equals("Repato.GridBubbleVisibility.TestRunner.addin", StringComparison.OrdinalIgnoreCase) || name.Equals("Repato.GridBubbleOffset.TestRunner.addin", StringComparison.OrdinalIgnoreCase))
+                if (name.Equals("Repato.CreateLevels.TestRunner.addin", StringComparison.OrdinalIgnoreCase) || name.Equals("Repato.TestRunner.addin", StringComparison.OrdinalIgnoreCase) || name.Equals("Repato.GridBubbleVisibility.TestRunner.addin", StringComparison.OrdinalIgnoreCase) || name.Equals("Repato.GridBubbleOffset.TestRunner.addin", StringComparison.OrdinalIgnoreCase) || name.Equals("Repato.GridResequence.TestRunner.addin", StringComparison.OrdinalIgnoreCase))
                     {
                         string source = Path.Combine(sourceRoot, name);
                         CheckPath(source);
