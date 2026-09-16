@@ -10,3 +10,6 @@ obj/
 !/QA/Reports/.gitkeep
 /QA/Screenshots/*
 !/QA/Screenshots/.gitkeep
+
+QA/Fixtures/*.0001.rvt
+QA/Fixtures/*.rvt.backup
