@@ -7,6 +7,7 @@ namespace Repato.Revit.TestRunner;
 
 internal static class TestSafetyGate
 {
+    internal static readonly string[] ApprovedGridBubbleFixtureNames = FixtureContentPolicy.ApprovedGridNames;
     internal const string RepositoryRoot = QAPathPolicy.RepositoryRoot;
     internal const string RunsRoot = RepositoryRoot + @"\QA\TestRuns";
     internal const string ReportsRoot = RepositoryRoot + @"\QA\Reports";
@@ -22,17 +23,17 @@ internal static class TestSafetyGate
         using (BasicFileInfo info = BasicFileInfo.Extract(path))
             if (info.IsWorkshared || info.IsCentral || info.IsLocal)
                 throw new InvalidOperationException("The saved file has worksharing/central metadata.");
-        var grids = new FilteredElementCollector(document).OfClass(typeof(Grid)).Cast<Grid>().ToList();
-        if (new FilteredElementCollector(document).OfClass(typeof(RevitLinkType)).Any())
-            throw new InvalidOperationException("Fixture must have zero Revit links.");
-        if (string.Equals(requiredFixtureId, "GridBubbleVisibilityEmpty", StringComparison.Ordinal))
-        {
-            string[] approved = ["A", "B", "C", "D", "1", "2", "3", "4"];
-            if (grids.Count != approved.Length || !grids.Select(g => g.Name).Order(StringComparer.Ordinal).SequenceEqual(approved.Order(StringComparer.Ordinal)))
-                throw new InvalidOperationException("Grid Bubble fixture must contain exactly grids A, B, C, D, 1, 2, 3, 4.");
-        }
-        else if (grids.Count != 0)
-            throw new InvalidOperationException("Fixture must have no grids and no Revit links.");
+        string[] gridNames = new FilteredElementCollector(document).OfClass(typeof(Grid)).Cast<Grid>().Select(g => g.Name).ToArray();
+        int linkCount = new FilteredElementCollector(document).OfClass(typeof(RevitLinkType)).Count();
+        FixtureContentPolicy.Validate(requiredFixtureId, gridNames, linkCount);
+        report.Assert(
+            "fixture-content-policy",
+            true,
+            FixtureContentPolicy.IsGridBubbleFixture(requiredFixtureId)
+                ? new { GridNames = ApprovedGridBubbleFixtureNames, RevitLinkCount = 0 }
+                : new { GridNames = Array.Empty<string>(), RevitLinkCount = 0 },
+            new { GridNames = gridNames.Order(StringComparer.Ordinal).ToArray(), RevitLinkCount = linkCount }
+        );
 
         string sidecarPath = QAPathPolicy.ValidatePath(path + ".fixture.json", RunsRoot, false);
         using var json = JsonDocument.Parse(File.ReadAllText(sidecarPath));
@@ -43,6 +44,14 @@ internal static class TestSafetyGate
         if (!Regex.IsMatch(fixtureId, @"\A[A-Za-z0-9][A-Za-z0-9_-]{0,79}\z") ||
             !Regex.IsMatch(expectedHash, @"\A[0-9A-Fa-f]{64}\z"))
             throw new InvalidOperationException("Invalid fixture provenance sidecar.");
+        if (FixtureContentPolicy.IsGridBubbleFixture(fixtureId))
+        {
+            string[] declared = json.RootElement.TryGetProperty("requiredGridNames", out JsonElement names)
+                ? names.EnumerateArray().Select(item => item.GetString() ?? "").ToArray()
+                : [];
+            if (!FixtureContentPolicy.SameNames(declared, ApprovedGridBubbleFixtureNames))
+                throw new InvalidOperationException("Grid Bubble fixture sidecar does not declare the exact approved grid set.");
+        }
         string fixturePath = QAPathPolicy.ValidatePath(Path.Combine(FixturesRoot, fixtureId + ".rvt"), FixturesRoot, true);
         if (!string.Equals(TestRunReport.Hash(fixturePath), expectedHash, StringComparison.OrdinalIgnoreCase) ||
             !string.Equals(TestRunReport.Hash(path), expectedHash, StringComparison.OrdinalIgnoreCase))

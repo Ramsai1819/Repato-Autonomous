@@ -1,0 +1,22 @@
+using System.Diagnostics;
+using Autodesk.Revit.Attributes;
+using Autodesk.Revit.DB;
+using Autodesk.Revit.DB.Events;
+using Autodesk.Revit.UI;
+namespace Repato.Revit.TestRunner;
+[Transaction(TransactionMode.Manual)]
+public sealed class GridBubbleOffsetTestCommand : IExternalCommand
+{
+ public const string SupportedTestId="grid-bubble-offset-v1";
+ public Result Execute(ExternalCommandData d, ref string m, ElementSet e){var r=Run(d.Application,d.JournalData.TryGetValue("testId",out string? t)?t:SupportedTestId); try{m=$"{r.Status}: {r.Write()}";return r.Status=="Passed"?Result.Succeeded:Result.Failed;}catch(Exception x){m=x.ToString();return Result.Failed;}}
+ public static TestRunReport Run(UIApplication app,string testId){var r=new TestRunReport{TestId=testId,FixtureId="GridBubbleOffsetEmpty",Inputs=new {SelectedGridCount=2,UnselectedGridPolicy="unchanged",End0Visible=false,End1Visible=true}};var sw=Stopwatch.StartNew();try{r.RevitVersion=$"{app.Application.VersionName}; {app.Application.VersionNumber}; {app.Application.VersionBuild}";r.IdentifyAssembly();AddinIsolationPolicy.RequireAllowed(r);if(testId!=SupportedTestId)throw new InvalidOperationException("Unknown test ID. Only "+SupportedTestId+" is supported.");var d=app.ActiveUIDocument?.Document??throw new InvalidOperationException("No saved active document.");r.DocumentPath=d.PathName;r.FixtureSha256=TestRunReport.Hash(d.PathName);if(app.Application.VersionNumber!="2025")throw new InvalidOperationException("Only Revit 2025 is supported.");TestSafetyGate.Verify(d,r,"GridBubbleOffsetEmpty");Execute(app,d,r);}catch(Exception x){r.Errors.Add(x.ToString());}finally{r.FinishedUtc=DateTimeOffset.UtcNow;r.DurationMilliseconds=sw.Elapsed.TotalMilliseconds;r.Status=r.Errors.Count==0&&r.Assertions.Count>0&&r.Assertions.All(a=>a.Passed)&&r.RollbackStatus=="RolledBack"?"Passed":"Failed";}return r;}
+ static void Execute(UIApplication app,Document d,TestRunReport r){var grids=new FilteredElementCollector(d).OfClass(typeof(Grid)).Cast<Grid>().ToList();if(grids.Count<3)throw new InvalidOperationException("Fixture must contain at least three grids.");var selected=grids.Take(2).ToList();var untouched=grids.Skip(2).ToDictionary(g=>g.Id.Value,g=>Snapshot(g,d.ActiveView));var baseline=grids.ToDictionary(g=>g.Id.Value,g=>Snapshot(g,d.ActiveView));using var g=new TransactionGroup(d,"Repato QA Grid Bubble Visibility - rollback");g.Start();r.RollbackStatus="Required";try{using var t=new Transaction(d,"QA bubble visibility");t.Start();foreach(var x in selected){var c=x.GetCurvesInView(DatumExtentType.ViewSpecific,d.ActiveView).First();bool horiz=Math.Abs(c.GetEndPoint(1).X-c.GetEndPoint(0).X)>=Math.Abs(c.GetEndPoint(1).Y-c.GetEndPoint(0).Y);x.SetDatumExtentType(DatumEnds.End0,d.ActiveView,DatumExtentType.ViewSpecific);x.SetDatumExtentType(DatumEnds.End1,d.ActiveView,DatumExtentType.ViewSpecific);if(horiz){x.HideBubbleInView(DatumEnds.End0,d.ActiveView);x.ShowBubbleInView(DatumEnds.End1,d.ActiveView);}else{x.HideBubbleInView(DatumEnds.End0,d.ActiveView);x.ShowBubbleInView(DatumEnds.End1,d.ActiveView);}}t.Commit();foreach(var x in selected){var c=x.GetCurvesInView(DatumExtentType.ViewSpecific,d.ActiveView).First();bool e0=!x.IsBubbleVisibleInView(DatumEnds.End0,d.ActiveView),e1=x.IsBubbleVisibleInView(DatumEnds.End1,d.ActiveView);r.Assert("selected-"+x.Id.Value,e0&&e1,new{leftOrBottom=false,rightOrTop=true},new{End0=e0,End1=e1});}foreach(var x in grids.Where(x=>untouched.ContainsKey(x.Id.Value)))r.Assert("unselected-"+x.Id.Value,Snapshot(x,d.ActiveView)==untouched[x.Id.Value],untouched[x.Id.Value],Snapshot(x,d.ActiveView));}finally{r.RollbackStatus=g.RollBack().ToString();r.Assert("rollback-status",r.RollbackStatus=="RolledBack","RolledBack",r.RollbackStatus);foreach(var x in grids)r.Assert("rollback-"+x.Id.Value,Snapshot(x,d.ActiveView)==baseline[x.Id.Value],baseline[x.Id.Value],Snapshot(x,d.ActiveView));}}
+ static string Snapshot(Grid g,View v)=>$"{g.IsBubbleVisibleInView(DatumEnds.End0,v)}|{g.IsBubbleVisibleInView(DatumEnds.End1,v)}";
+}
+
+
+
+
+
+
+

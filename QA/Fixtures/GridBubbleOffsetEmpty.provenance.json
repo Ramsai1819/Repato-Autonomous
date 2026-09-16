@@ -1,0 +1,15 @@
+﻿{
+    "requiredGridNames":  [
+                              "A",
+                              "B",
+                              "C",
+                              "D",
+                              "1",
+                              "2",
+                              "3",
+                              "4"
+                          ],
+    "sourceSha256":  "ABB5A1273C2B0E838C4397B3AD729B9A4227A629E80C2C70EEAB32D2ED183D25",
+    "origin":  "Controlled copy of GridBubbleVisibilityEmpty fixture",
+    "fixtureId":  "GridBubbleOffsetEmpty"
+}

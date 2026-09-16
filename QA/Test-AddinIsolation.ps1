@@ -42,6 +42,7 @@ Check 'approved machine name copied to user profile remains blocked' (!(Inspect)
 Move-Item -LiteralPath $userCopy -Destination ($userCopy + '.test-disabled')
 $qaName = 'Repato.CreateLevels.TestRunner.addin'
 $bubbleName = 'Repato.GridBubbleVisibility.TestRunner.addin'
+$offsetName = 'Repato.GridBubbleOffset.TestRunner.addin'
 [IO.File]::WriteAllText((Join-Path $qa $qaName), '<qa/>')
 Copy-Item -LiteralPath (Join-Path $qa $qaName) -Destination (Join-Path $user $qaName)
 Check 'repository QA bootstrap exact hash accepted' ((Inspect).Allowed)
@@ -51,6 +52,9 @@ Copy-Item -LiteralPath (Join-Path $qa $qaName) -Destination (Join-Path $user $qa
 [IO.File]::WriteAllText((Join-Path $qa $bubbleName), '<bubble-qa/>')
 Copy-Item -LiteralPath (Join-Path $qa $bubbleName) -Destination (Join-Path $user $bubbleName)
 Check 'Grid Bubble repository manifest exact hash accepted' ((Inspect).Allowed -and @((Inspect).DetectedAddins | Where-Object {$_.Path -like ('*' + $bubbleName) -and $_.Allowlisted}).Count -eq 1)
+[IO.File]::WriteAllText((Join-Path $qa $offsetName), '<offset-qa/>')
+Copy-Item -LiteralPath (Join-Path $qa $offsetName) -Destination (Join-Path $user $offsetName)
+Check 'Grid Bubble Offset repository manifest exact hash accepted' ((Inspect).Allowed -and @((Inspect).DetectedAddins | Where-Object {$_.Path -like ('*' + $offsetName) -and $_.Allowlisted}).Count -eq 1)
 $emptyUser = Join-Path $scratch 'empty-user'
 New-Item -ItemType Directory -Path $emptyUser -Force | Out-Null
 $emptyMachine = Join-Path $scratch 'empty-machine'; New-Item -ItemType Directory -Path $emptyMachine -Force | Out-Null
@@ -72,7 +76,7 @@ foreach ($case in @('wildcard','duplicate','outside root','bad hash','bad schema
     if ($case -eq 'invalid json') { '{bad' | Set-Content -LiteralPath $policyPath }
     else { $changed | ConvertTo-Json -Depth 5 | Set-Content -LiteralPath $policyPath -Encoding UTF8 }
     $result = Inspect
-    Check ($case + ' policy rejected with complete inventory') (!$result.Allowed -and $result.Errors.Count -gt 0 -and $result.DetectedAddins.Count -eq 3)
+    Check ($case + ' policy rejected with complete inventory') (!$result.Allowed -and $result.Errors.Count -gt 0 -and $result.DetectedAddins.Count -eq 4)
 }
 Move-Item -LiteralPath $policyPath -Destination ($policyPath + '.missing')
 Check 'missing policy fails closed' (!(Inspect).Allowed)

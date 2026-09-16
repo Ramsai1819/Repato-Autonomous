@@ -40,7 +40,7 @@ Test("approved-bom", (_,_,_,_) => {}, true);
 Test("unknown", (_,m,_,_) => File.WriteAllText(Path.Combine(m,"Other.ADDIN"),"unknown"), false);
 Test("tampered", (_,m,_,_) => File.AppendAllText(Path.Combine(m,"Reviewed.addin"),"changed"), false);
 Test("user-shadow", (_,m,u,_) => File.Copy(Path.Combine(m,"Reviewed.addin"),Path.Combine(u,"Reviewed.addin")), false);
-Test("qa-exact", (_,_,u,s) => { foreach(string n in new[]{"Repato.CreateLevels.TestRunner.addin","Repato.TestRunner.addin","Repato.GridBubbleVisibility.TestRunner.addin"}) { File.WriteAllText(Path.Combine(s,n),"qa"); File.WriteAllText(Path.Combine(u,n),"qa"); } }, true);
+Test("qa-exact", (_,_,u,s) => { foreach(string n in new[]{"Repato.CreateLevels.TestRunner.addin","Repato.TestRunner.addin","Repato.GridBubbleVisibility.TestRunner.addin","Repato.GridBubbleOffset.TestRunner.addin"}) { File.WriteAllText(Path.Combine(s,n),"qa"); File.WriteAllText(Path.Combine(u,n),"qa"); } }, true);
 Test("qa-modified", (_,_,u,s) => { const string n="Repato.TestRunner.addin"; File.WriteAllText(Path.Combine(s,n),"qa"); File.WriteAllText(Path.Combine(u,n),"changed"); }, false);
 Test("missing-policy", (p,_,_,_) => File.Delete(p), false);
 Test("malformed-policy", (p,_,_,_) => File.WriteAllText(p,"{"), false);

@@ -45,7 +45,7 @@ function Get-AddinIsolationInventory {
                 elseif ($scope -eq 'UserProfile') {
                     # Only the two repository-owned QA bootstrap manifests are eligible.
                     # The machine-wide allowlist can never authorize a user-profile add-in.
-                    if ($file.Name -in @('Repato.CreateLevels.TestRunner.addin','Repato.TestRunner.addin','Repato.GridBubbleVisibility.TestRunner.addin')) {
+                    if ($file.Name -in @('Repato.CreateLevels.TestRunner.addin','Repato.TestRunner.addin','Repato.GridBubbleVisibility.TestRunner.addin','Repato.GridBubbleOffset.TestRunner.addin')) {
                         $source = Assert-ChildPath (Join-Path $QaSourceRoot $file.Name) $QaSourceRoot
                         $detected.Allowlisted = $detected.Sha256 -ieq (Get-Sha256 $source)
                         $detected.Reason = if ($detected.Allowlisted) { 'Repository-owned QA manifest verified against source' } else { 'QA manifest differs from repository source' }
