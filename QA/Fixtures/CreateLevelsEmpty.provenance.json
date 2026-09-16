@@ -1,0 +1,10 @@
+{
+  "fixtureId": "CreateLevelsEmpty",
+  "file": "CreateLevelsEmpty.rvt",
+  "purpose": "Dedicated Create Levels QA asset; empty of test levels, retaining template levels and views.",
+  "origin": "Byte-for-byte copy of the existing controlled CreateGridsEmptyPlan.rvt fixture, used by the passed Create Grids QA run aa2cc3b8d4fe402189c8d5ce22385a7c.",
+  "sourceCommit": "04b62a29ad06db6ffe9c944dcfcf04f2fcd3b48c",
+  "sourceSha256": "92CC9E434E2C4DD6720A2AA564E19F4E1A30EB3DA63CEA73CF737F875B9EDD45",
+  "revitVersion": "2025",
+  "qualification": "File copy only; Create Levels execution and uncropped elevation screenshot export remain to be verified in Revit. Runtime checks must reject an unsuitable fixture."
+}

@@ -1,0 +1,19 @@
+<?xml version="1.0" encoding="utf-8"?>
+<RevitAddIns>
+  <!-- QA only: install solely in the isolated RepatoQA profile. -->
+  <AddIn Type="Application">
+    <Name>Repato Create Levels QA Startup</Name>
+    <Assembly>.\RepatoQA\Repato.Revit.dll</Assembly>
+    <AddInId>0AE26D22-36DB-4F80-A570-B050708FDD43</AddInId>
+    <FullClassName>Repato.Revit.TestRunner.CreateLevelsQaApplication</FullClassName>
+    <VendorId>RPT0</VendorId>
+  </AddIn>
+  <AddIn Type="Command">
+    <Name>Repato QA Create Levels Runner</Name>
+    <Assembly>.\RepatoQA\Repato.Revit.dll</Assembly>
+    <AddInId>C3B51717-C910-47D0-84EC-7779A2F12681</AddInId>
+    <FullClassName>Repato.Revit.TestRunner.CreateLevelsTestCommand</FullClassName>
+    <Text>Repato QA - Create Levels</Text>
+    <VendorId>RPT0</VendorId>
+  </AddIn>
+</RevitAddIns>

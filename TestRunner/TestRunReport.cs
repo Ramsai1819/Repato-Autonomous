@@ -14,7 +14,7 @@ public sealed class TestRunReport
     public string DocumentPath { get; set; } = "";
     public string FixtureId { get; set; } = "";
     public string FixtureSha256 { get; set; } = "";
-    public object Inputs { get; } = new
+    public object Inputs { get; set; } = new
     {
         VerticalNames = new[] { "A", "B", "C", "D" },
         HorizontalNames = new[] { "1", "2", "3", "4" },
@@ -23,6 +23,9 @@ public sealed class TestRunReport
         LengthMm = 48000
     };
     public List<string> CreatedIds { get; } = [];
+    public List<string> ChangedIds { get; } = [];
+    public List<string> DeletedIds { get; } = [];
+    public List<ScreenshotEvidence> Screenshots { get; } = [];
     public List<TestAssertion> Assertions { get; } = [];
     public List<string> Errors { get; } = [];
     public DateTimeOffset StartedUtc { get; } = DateTimeOffset.UtcNow;
@@ -30,6 +33,7 @@ public sealed class TestRunReport
     public double DurationMilliseconds { get; set; }
     public string RevitVersion { get; set; } = "";
     public object? AssemblyIdentity { get; set; }
+    public AddinInventory? AddinIsolation { get; set; }
     public string RollbackStatus { get; set; } = "NotStarted";
     public string CreatedIdsLifecycle { get; } =
         "Observed before rollback; not persistent model elements.";
@@ -107,3 +111,5 @@ public sealed record TestAssertion(
     object Expected,
     object Actual
 );
+
+public sealed record ScreenshotEvidence(string Phase, string Path, string Sha256, string ViewId, string ViewName);

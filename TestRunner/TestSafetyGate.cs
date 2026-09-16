@@ -12,7 +12,7 @@ internal static class TestSafetyGate
     internal const string ReportsRoot = RepositoryRoot + @"\QA\Reports";
     private const string FixturesRoot = RepositoryRoot + @"\QA\Fixtures";
 
-    internal static void Verify(Document document, TestRunReport report)
+    internal static void Verify(Document document, TestRunReport report, string? requiredFixtureId = null)
     {
         if (document.IsFamilyDocument || document.IsLinked || document.IsReadOnly || document.IsModified || document.IsModifiable ||
             document.IsWorkshared || document.IsModelInCloud || document.IsDetached)
@@ -30,6 +30,8 @@ internal static class TestSafetyGate
         using var json = JsonDocument.Parse(File.ReadAllText(sidecarPath));
         string fixtureId = json.RootElement.GetProperty("fixtureId").GetString() ?? "";
         string expectedHash = json.RootElement.GetProperty("sourceSha256").GetString() ?? "";
+        if (requiredFixtureId is not null && !string.Equals(fixtureId, requiredFixtureId, StringComparison.Ordinal))
+            throw new InvalidOperationException("This test requires fixture " + requiredFixtureId + ".");
         if (!Regex.IsMatch(fixtureId, @"\A[A-Za-z0-9][A-Za-z0-9_-]{0,79}\z") ||
             !Regex.IsMatch(expectedHash, @"\A[0-9A-Fa-f]{64}\z"))
             throw new InvalidOperationException("Invalid fixture provenance sidecar.");

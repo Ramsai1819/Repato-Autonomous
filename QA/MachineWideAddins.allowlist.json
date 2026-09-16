@@ -1,0 +1,57 @@
+﻿{
+    "schemaVersion":  1,
+    "machineWideRoot":  "C:\\ProgramData\\Autodesk\\Revit\\Addins\\2025",
+    "reviewDate":  "2026-09-15",
+    "approvedMachineWideManifests":  [
+                                         {
+                                             "path":  "C:\\ProgramData\\Autodesk\\Revit\\Addins\\2025\\0_Enscape.addin",
+                                             "sha256":  "A2E8FAF937936A9D2949CFFE36B561FDB47EA113A0FC7C022875C1D51742B6F0",
+                                             "reviewReason":  "Explicit user-approved installed manifest, reviewed 2026-09-15 for QA coexistence. Not a runtime compatibility certification."
+                                         },
+                                         {
+                                             "path":  "C:\\ProgramData\\Autodesk\\Revit\\Addins\\2025\\Autodesk.BatchPrint.addin",
+                                             "sha256":  "83862D7DFEE74048C8225CCB827EF601649CD4335599E6BD294FE10570520033",
+                                             "reviewReason":  "Explicit user-approved installed manifest, reviewed 2026-09-15 for QA coexistence. Not a runtime compatibility certification."
+                                         },
+                                         {
+                                             "path":  "C:\\ProgramData\\Autodesk\\Revit\\Addins\\2025\\Autodesk.Collaborate.addin",
+                                             "sha256":  "11856FF4041EC77F3E772584C9BA53602417DFC4D3223D950EB81662ADF949DC",
+                                             "reviewReason":  "Explicit user-approved installed manifest, reviewed 2026-09-15 for QA coexistence. Not a runtime compatibility certification."
+                                         },
+                                         {
+                                             "path":  "C:\\ProgramData\\Autodesk\\Revit\\Addins\\2025\\Autodesk.eTransmitApplication.addin",
+                                             "sha256":  "D0C8927752A596BE5BE5C1EC5C06587B5DF68038659AC722F214A34378B6C538",
+                                             "reviewReason":  "Explicit user-approved installed manifest, reviewed 2026-09-15 for QA coexistence. Not a runtime compatibility certification."
+                                         },
+                                         {
+                                             "path":  "C:\\ProgramData\\Autodesk\\Revit\\Addins\\2025\\Autodesk.TotalCarbonAnalysis.addin",
+                                             "sha256":  "34645EC5B45AE864B9E60CC6CFD1DC17BF7768FCD4AE0557B06B2EC1037EBEC6",
+                                             "reviewReason":  "Explicit user-approved installed manifest, reviewed 2026-09-15 for QA coexistence. Not a runtime compatibility certification."
+                                         },
+                                         {
+                                             "path":  "C:\\ProgramData\\Autodesk\\Revit\\Addins\\2025\\Autodesk.WorksharingMonitor.Application.addin",
+                                             "sha256":  "57C71B157BB4892B5D9E47102F06EA337E2F369701F143544580B7A7AEDDCEF1",
+                                             "reviewReason":  "Explicit user-approved installed manifest, reviewed 2026-09-15 for QA coexistence. Not a runtime compatibility certification."
+                                         },
+                                         {
+                                             "path":  "C:\\ProgramData\\Autodesk\\Revit\\Addins\\2025\\D5Converter.addin",
+                                             "sha256":  "6A1BD0288BD498A45DC2BCC218755D598EE54418EFE7EBF2AF268FDBEF70BDDA",
+                                             "reviewReason":  "Explicit user-approved installed manifest, reviewed 2026-09-15 for QA coexistence. Not a runtime compatibility certification."
+                                         },
+                                         {
+                                             "path":  "C:\\ProgramData\\Autodesk\\Revit\\Addins\\2025\\EvolveLAB.Veras.addin",
+                                             "sha256":  "27C7DFC16BACDF070E434FCB09B9385EBC8AEBDEF5F95B3A37FA7F5391CDC505",
+                                             "reviewReason":  "Explicit user-approved installed manifest, reviewed 2026-09-15 for QA coexistence. Not a runtime compatibility certification."
+                                         },
+                                         {
+                                             "path":  "C:\\ProgramData\\Autodesk\\Revit\\Addins\\2025\\ExportViewSelectorApp.addin",
+                                             "sha256":  "20EC7E180772732FEB1F64EC569541972861D9CA7453D1CA7E1649B88F172143",
+                                             "reviewReason":  "Explicit user-approved installed manifest, reviewed 2026-09-15 for QA coexistence. Not a runtime compatibility certification."
+                                         },
+                                         {
+                                             "path":  "C:\\ProgramData\\Autodesk\\Revit\\Addins\\2025\\FormItConverter.addin",
+                                             "sha256":  "29E45A427D73BFBF5AF213B95674B3FC2B0C83A202D97C41BF17BB092F6F4ACF",
+                                             "reviewReason":  "Explicit user-approved installed manifest, reviewed 2026-09-15 for QA coexistence. Not a runtime compatibility certification."
+                                         }
+                                     ]
+}
