@@ -165,3 +165,18 @@ dotnet build ".\Forma.RevitConnector.csproj" -c Release -p:RevitInstallDir="E:\r
 ```
 
 The isolation checks use temporary synthetic registration folders. They never edit installed add-ins or launch Revit. The C# harness compiles the actual pure policy source without Revit references; its temporary report stub only supplies the report container used by `RequireAllowed`.
+
+## Repato Welcome supervised UI smoke test
+
+The Welcome runner uses the existing controlled `CreateLevelsEmpty.rvt` fixture and invokes the same `RepatoWelcomeCommand` implementation as production. It adds no production ribbon button and performs no model operation. The run verifies `Result.Succeeded`, the exact `Repato` dialog title and message, a hashed desktop screenshot, the loaded assembly identity and SHA-256, unchanged document elements, and byte-for-byte equality between the disposable model, its pre-run hash, and the source fixture.
+
+This is a **supervised UI smoke test**, not a fully unattended test. Tara must watch the known Welcome dialog, leave it visible long enough for the screenshot, then click **OK**. Any different or additional dialog is an unknown dialog and stops the run. The controller never dismisses UI, saves the model, closes Revit, or kills a timed-out process. Failed reports, run folders, launch logs, and startup logs are preserved for Maya.
+
+After explicit Revit authorization, run under the `RepatoQA` Windows account with Revit closed:
+
+```powershell
+Set-Location 'C:\Repato-Autonomous\Source'
+.\QA\Invoke-WelcomeSmokeQA.ps1 -Action Install
+$receipt = .\QA\Invoke-WelcomeSmokeQA.ps1 -Action Run -TimeoutSeconds 900
+.\QA\Invoke-WelcomeSmokeQA.ps1 -Action Verify -ReceiptPath $receipt
+```

@@ -1,0 +1,5 @@
+<?xml version="1.0" encoding="utf-8"?>
+<RevitAddIns>
+  <AddIn Type="Application"><Name>Repato Welcome Smoke QA Startup</Name><Assembly>.\RepatoQA\Repato.Revit.dll</Assembly><AddInId>4BFC625F-CC00-43FB-86EC-07B890398A34</AddInId><FullClassName>Repato.Revit.TestRunner.WelcomeSmokeQaApplication</FullClassName><VendorId>RPT0</VendorId></AddIn>
+  <AddIn Type="Command"><Name>Repato Welcome Smoke QA</Name><Assembly>.\RepatoQA\Repato.Revit.dll</Assembly><AddInId>3C04920D-BB9E-4482-A111-C618D49481BE</AddInId><FullClassName>Repato.Revit.TestRunner.WelcomeSmokeTestCommand</FullClassName><Text>Repato QA - Welcome Smoke</Text><VendorId>RPT0</VendorId></AddIn>
+</RevitAddIns>

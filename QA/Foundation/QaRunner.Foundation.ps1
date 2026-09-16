@@ -50,10 +50,14 @@ function Write-RepatoQaDiagnostic([string]$Path,[string]$Phase,[string]$TestId,[
 }
 
 function Start-RepatoQaRevit {
-    param([string]$RevitExe,[string]$RequestEnvironmentVariable,[string]$RequestPath,[string]$LaunchLogPath,$LaunchDetails)
+    param([string]$RevitExe,[string]$RequestEnvironmentVariable,[string]$RequestPath,[string]$LaunchLogPath,$LaunchDetails,[switch]$Visible)
     "$(Get-Date -Format o) Revit process launch requested; $LaunchDetails"|Set-Content -LiteralPath $LaunchLogPath -Encoding UTF8
     $old=[Environment]::GetEnvironmentVariable($RequestEnvironmentVariable,'Process')
-    try {[Environment]::SetEnvironmentVariable($RequestEnvironmentVariable,$RequestPath,'Process');Start-Process -FilePath $RevitExe -WindowStyle Hidden -PassThru}
+    try {
+        [Environment]::SetEnvironmentVariable($RequestEnvironmentVariable,$RequestPath,'Process')
+        if($Visible){Start-Process -FilePath $RevitExe -PassThru}
+        else{Start-Process -FilePath $RevitExe -WindowStyle Hidden -PassThru}
+    }
     finally {[Environment]::SetEnvironmentVariable($RequestEnvironmentVariable,$old,'Process')}
 }
 
