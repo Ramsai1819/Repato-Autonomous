@@ -22,8 +22,16 @@ internal static class TestSafetyGate
         using (BasicFileInfo info = BasicFileInfo.Extract(path))
             if (info.IsWorkshared || info.IsCentral || info.IsLocal)
                 throw new InvalidOperationException("The saved file has worksharing/central metadata.");
-        if (new FilteredElementCollector(document).OfClass(typeof(Grid)).Any() ||
-            new FilteredElementCollector(document).OfClass(typeof(RevitLinkType)).Any())
+        var grids = new FilteredElementCollector(document).OfClass(typeof(Grid)).Cast<Grid>().ToList();
+        if (new FilteredElementCollector(document).OfClass(typeof(RevitLinkType)).Any())
+            throw new InvalidOperationException("Fixture must have zero Revit links.");
+        if (string.Equals(requiredFixtureId, "GridBubbleVisibilityEmpty", StringComparison.Ordinal))
+        {
+            string[] approved = ["A", "B", "C", "D", "1", "2", "3", "4"];
+            if (grids.Count != approved.Length || !grids.Select(g => g.Name).Order(StringComparer.Ordinal).SequenceEqual(approved.Order(StringComparer.Ordinal)))
+                throw new InvalidOperationException("Grid Bubble fixture must contain exactly grids A, B, C, D, 1, 2, 3, 4.");
+        }
+        else if (grids.Count != 0)
             throw new InvalidOperationException("Fixture must have no grids and no Revit links.");
 
         string sidecarPath = QAPathPolicy.ValidatePath(path + ".fixture.json", RunsRoot, false);

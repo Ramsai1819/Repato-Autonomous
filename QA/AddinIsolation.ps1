@@ -45,7 +45,7 @@ function Get-AddinIsolationInventory {
                 elseif ($scope -eq 'UserProfile') {
                     # Only the two repository-owned QA bootstrap manifests are eligible.
                     # The machine-wide allowlist can never authorize a user-profile add-in.
-                    if ($file.Name -in @('Repato.CreateLevels.TestRunner.addin','Repato.TestRunner.addin')) {
+                    if ($file.Name -in @('Repato.CreateLevels.TestRunner.addin','Repato.TestRunner.addin','Repato.GridBubbleVisibility.TestRunner.addin')) {
                         $source = Assert-ChildPath (Join-Path $QaSourceRoot $file.Name) $QaSourceRoot
                         $detected.Allowlisted = $detected.Sha256 -ieq (Get-Sha256 $source)
                         $detected.Reason = if ($detected.Allowlisted) { 'Repository-owned QA manifest verified against source' } else { 'QA manifest differs from repository source' }
@@ -57,6 +57,10 @@ function Get-AddinIsolationInventory {
             $inventory.DetectedAddins += [pscustomobject]$detected
         }
     }
+    # Force collection shape at the function boundary; callers must not depend on
+    # PowerShell's scalar unrolling for zero or one detected manifests.
+    $inventory.DetectedAddins = [object[]]@($inventory.DetectedAddins)
+    $inventory.Errors = [object[]]@($inventory.Errors)
     $inventory.Allowed = $inventory.Errors.Count -eq 0 -and @($inventory.DetectedAddins | Where-Object { !$_.Allowlisted }).Count -eq 0
     return [pscustomobject]$inventory
 }
@@ -65,7 +69,7 @@ function Assert-ReportedAddinIsolation {
     param($RequestInventory, $ReportInventory)
     foreach ($inventory in @($RequestInventory, $ReportInventory)) {
         if ($null -eq $inventory -or $inventory.Allowed -isnot [bool] -or !$inventory.Allowed -or
-            @($inventory.Errors).Count -ne 0 -or $inventory.DetectedAddins -isnot [Array]) { throw 'Missing or failed add-in inventory.' }
+            @($inventory.Errors).Count -ne 0 -or $null -eq $inventory.DetectedAddins) { throw 'Missing or failed add-in inventory.' }
         $seen = @{}
         foreach ($item in $inventory.DetectedAddins) {
             if ($item.Scope -notin @('MachineWide','UserProfile') -or $item.Allowlisted -isnot [bool] -or !$item.Allowlisted -or

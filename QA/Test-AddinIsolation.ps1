@@ -41,12 +41,25 @@ Copy-Item -LiteralPath $approvedPath -Destination $userCopy
 Check 'approved machine name copied to user profile remains blocked' (!(Inspect).Allowed)
 Move-Item -LiteralPath $userCopy -Destination ($userCopy + '.test-disabled')
 $qaName = 'Repato.CreateLevels.TestRunner.addin'
+$bubbleName = 'Repato.GridBubbleVisibility.TestRunner.addin'
 [IO.File]::WriteAllText((Join-Path $qa $qaName), '<qa/>')
 Copy-Item -LiteralPath (Join-Path $qa $qaName) -Destination (Join-Path $user $qaName)
 Check 'repository QA bootstrap exact hash accepted' ((Inspect).Allowed)
 [IO.File]::WriteAllText((Join-Path $user $qaName), '<not-qa/>')
 Check 'QA filename with changed content blocked' (!(Inspect).Allowed)
 Copy-Item -LiteralPath (Join-Path $qa $qaName) -Destination (Join-Path $user $qaName) -Force
+[IO.File]::WriteAllText((Join-Path $qa $bubbleName), '<bubble-qa/>')
+Copy-Item -LiteralPath (Join-Path $qa $bubbleName) -Destination (Join-Path $user $bubbleName)
+Check 'Grid Bubble repository manifest exact hash accepted' ((Inspect).Allowed -and @((Inspect).DetectedAddins | Where-Object {$_.Path -like ('*' + $bubbleName) -and $_.Allowlisted}).Count -eq 1)
+$emptyUser = Join-Path $scratch 'empty-user'
+New-Item -ItemType Directory -Path $emptyUser -Force | Out-Null
+$emptyMachine = Join-Path $scratch 'empty-machine'; New-Item -ItemType Directory -Path $emptyMachine -Force | Out-Null
+$zero = Get-AddinIsolationInventory -PolicyPath $policyPath -MachineRoot $emptyMachine -UserRoot $emptyUser -QaSourceRoot $qa
+Check 'zero detected manifests returns an array' ($zero.DetectedAddins -is [Array])
+$oneUser = Join-Path $scratch 'one-user'; New-Item -ItemType Directory -Path $oneUser -Force | Out-Null
+Copy-Item -LiteralPath (Join-Path $qa $qaName) -Destination (Join-Path $oneUser $qaName)
+$one = Get-AddinIsolationInventory -PolicyPath $policyPath -MachineRoot $machine -UserRoot $oneUser -QaSourceRoot $qa
+Check 'one detected manifest returns an array' ($one.DetectedAddins -is [Array] -and $one.DetectedAddins.Count -eq 2)
 foreach ($case in @('wildcard','duplicate','outside root','bad hash','bad schema','invalid json')) {
     $changed = $policyText | ConvertFrom-Json
     switch ($case) {
@@ -59,7 +72,7 @@ foreach ($case in @('wildcard','duplicate','outside root','bad hash','bad schema
     if ($case -eq 'invalid json') { '{bad' | Set-Content -LiteralPath $policyPath }
     else { $changed | ConvertTo-Json -Depth 5 | Set-Content -LiteralPath $policyPath -Encoding UTF8 }
     $result = Inspect
-    Check ($case + ' policy rejected with complete inventory') (!$result.Allowed -and $result.Errors.Count -gt 0 -and $result.DetectedAddins.Count -eq 2)
+    Check ($case + ' policy rejected with complete inventory') (!$result.Allowed -and $result.Errors.Count -gt 0 -and $result.DetectedAddins.Count -eq 3)
 }
 Move-Item -LiteralPath $policyPath -Destination ($policyPath + '.missing')
 Check 'missing policy fails closed' (!(Inspect).Allowed)
