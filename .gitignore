@@ -13,3 +13,7 @@ obj/
 
 QA/Fixtures/*.0001.rvt
 QA/Fixtures/*.rvt.backup
+
+# Local agent orchestration runtime state; keep only the directory placeholder.
+/AgentOrchestration/Store/*
+!/AgentOrchestration/Store/.gitkeep
