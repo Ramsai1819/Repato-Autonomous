@@ -7,6 +7,7 @@ param(
     [ValidateRange(1,1440)][int]$ExpiryMinutes=30,
     [string]$ErrorDetails,
     [string]$StoreRoot=(Join-Path $PSScriptRoot 'Store'),
+    [string]$JointApprovalId,
     [switch]$DryRun
 )
 $ErrorActionPreference='Stop'
