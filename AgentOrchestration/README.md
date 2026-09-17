@@ -158,3 +158,11 @@ $maya = '.\AgentOrchestration\Invoke-RepatoMayaCoordinator.ps1'
 ```
 
 The loop is intentionally local and rule-based. It does not infer detailed implementation plans, authenticate the user, schedule agents, start Neil or Tara processes, create branches/worktrees, or automatically retry failed work. Human approval and the existing adapter-specific validation remain required before any real implementation or build action.
+
+## Local process supervisor
+
+`Invoke-RepatoSupervisor.ps1` wraps only the registered adapter entry points in `SupervisorAdapters.json`: `neil.apply` and `tara.run`. Plans derive the adapter run ID from the task's validated Neil or Tara run; no executable, command string, script path, or argument list is accepted from the caller. Plans bind the adapter registry hash, task revision, agent, stage, and adapter identity. Maya approval is checked immediately before start, and one planned/running supervisor run is allowed per task.
+
+`supervisor-plan`, `supervisor-preview`, `supervisor-request-approval`, `supervisor-start`, `supervisor-status`, `supervisor-reconcile`, `supervisor-stop-monitor`, and `supervisor-fail` are available. Preview is side-effect free. Real starts use a fixed PowerShell host, fixed repository working directory, and the registered adapter operation. stdout, stderr, PID, exit code, timeout state, timestamps, duration, and a JSON log under `AgentOrchestration/Logs` are retained. A timeout is reported without killing the child; Revit is never terminated automatically. Failed and blocked records remain preserved.
+
+The supervisor does not create branches or worktrees, execute arbitrary commands, commit, delete files, change add-ins, launch Revit, call OpenAI, or contact external services. The current adapter contracts each have their own approval bound to the task revision; a future joint approval record is needed for unattended nested adapter execution without invalidating the inner approval. Until then, the supervisor safely records and reports that stale inner approval as a failed handoff.

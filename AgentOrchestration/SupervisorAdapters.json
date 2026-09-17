@@ -1,0 +1,8 @@
+{
+  "schemaVersion": 1,
+  "repositoryRoot": "C:\\Repato-Autonomous\\Source",
+  "adapters": {
+    "neil.apply": { "agent": "Neil", "entryPoint": "AgentOrchestration/Invoke-RepatoNeilAdapter.ps1", "operation": "neil-apply", "timeoutSeconds": 900 },
+    "tara.run": { "agent": "Tara", "entryPoint": "AgentOrchestration/Invoke-RepatoTaraAdapter.ps1", "operation": "tara-run", "timeoutSeconds": 1800 }
+  }
+}
