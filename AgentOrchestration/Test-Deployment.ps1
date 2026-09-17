@@ -1,0 +1,1 @@
+$ErrorActionPreference='Stop';Import-Module (Join-Path $PSScriptRoot 'Repato.Deployment.psm1') -Force;$r=Get-DeploymentTargets;if(@($r.targets).Count -ne 1){throw 'Unexpected target registry'};try{New-DeployPlan (Join-Path $env:TEMP 'none') x C:\Windows\win.ini C:\Windows\win.ini revit -DryRun;throw 'Revit target accepted'}catch{};'Deployment checks passed.'

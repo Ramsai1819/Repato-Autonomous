@@ -1,0 +1,6 @@
+{
+  "schemaVersion": 1,
+  "targets": [
+    {"targetId":"qa-local-artifact","kind":"qa","path":"QA/TestDeployments/Repato.Revit.dll","revit":false}
+  ]
+}
