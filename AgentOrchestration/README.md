@@ -140,3 +140,21 @@ $plan = & $neil neil-plan -TaskId REP-002 -ActionId validation.fixture-marker-fo
 The operations are `neil-plan`, `neil-validate`, `neil-preview`, `neil-request-approval`, `neil-apply`, and `neil-fail`. Dry-run application returns the exact changed-file list, hashes, and diff without editing a file, changing task state, or creating a log.
 
 The adapter cannot create arbitrary patches, add or delete files, rename files, run commands, commit, launch Revit, modify add-ins, contact external services, or edit outside the registry. It does not authenticate Maya through the operating system, merge multiple files in one atomic filesystem transaction, or resolve merge conflicts. Registry changes remain ordinary reviewed repository changes and are not self-authorizing.
+
+## Maya coordinator loop
+
+`Invoke-RepatoMayaCoordinator.ps1` is the local coordinator over the existing task store, locks, approvals, executor records, Neil adapter, and Tara adapter. `maya-cycle-preview` reads and validates every task, reports queued assignments, and identifies approval escalations without writing state. Implementation intent is assigned to Neil; build, QA, validation, regression, report, and evidence intent is assigned to Tara. Assignment uses the existing atomic mutation and exclusive `store.lock`, so a queued task cannot be assigned twice or concurrently.
+
+The coordinator operations are `maya-cycle-preview`, `maya-assign`, `maya-status`, `maya-reconcile`, `maya-request-approval`, and `maya-fail`. Status output includes assignment, stage, revision, executor/Neil/Tara runs, logs, reports, pending approvals, errors, and history count. Reconciliation preserves failed results, routes a passed Neil implementation to Tara build checks, routes a passed Tara build to QA, and marks a passed Tara QA task as `passed`. Only valid one-stage workflow moves are made.
+
+Maya can request an approval, including user approval for the existing dangerous action IDs, but has no approval or commit operation. A user-level request cannot be approved by Maya. All coordinator mutations accept `-DryRun`; preview mode performs no queue, status, history, assignment, approval, or file changes. The loop never launches Revit, executes Git, edits production files, deletes files, changes add-ins, runs arbitrary commands, calls OpenAI, or contacts external services.
+
+```powershell
+$maya = '.\AgentOrchestration\Invoke-RepatoMayaCoordinator.ps1'
+& $maya maya-cycle-preview -StoreRoot '.\AgentOrchestration\Store'
+& $maya maya-assign -TaskId REP-001 -StoreRoot '.\AgentOrchestration\Store'
+& $maya maya-status -TaskId REP-001 -StoreRoot '.\AgentOrchestration\Store'
+& $maya maya-reconcile -TaskId REP-001 -DryRun -StoreRoot '.\AgentOrchestration\Store'
+```
+
+The loop is intentionally local and rule-based. It does not infer detailed implementation plans, authenticate the user, schedule agents, start Neil or Tara processes, create branches/worktrees, or automatically retry failed work. Human approval and the existing adapter-specific validation remain required before any real implementation or build action.
