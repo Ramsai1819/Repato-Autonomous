@@ -1,0 +1,33 @@
+{
+  "schemaVersion": 1,
+  "repositoryRoot": "C:\\Repato-Autonomous\\Source",
+  "productionFiles": [
+    "CreateGridsCommand.cs",
+    "FormaApplication.cs",
+    "GridBubbleVisibilityCommand.cs",
+    "GridResequenceCommand.cs",
+    "LevelCreator.cs",
+    "OffsetGridBubblesCommand.cs",
+    "RepatoWelcomeCommand.cs"
+  ],
+  "actions": [
+    {
+      "actionId": "validation.fixture-marker-forward-v1",
+      "targetPath": "AgentOrchestration/Fixtures/NeilAdapterTarget.txt",
+      "testOnly": true,
+      "description": "Exercise the controlled edit lifecycle without changing production source.",
+      "replacements": [
+        { "oldText": "state=before", "newText": "state=after" }
+      ]
+    },
+    {
+      "actionId": "validation.fixture-marker-reset-v1",
+      "targetPath": "AgentOrchestration/Fixtures/NeilAdapterTarget.txt",
+      "testOnly": true,
+      "description": "Restore the controlled adapter validation fixture.",
+      "replacements": [
+        { "oldText": "state=after", "newText": "state=before" }
+      ]
+    }
+  ]
+}

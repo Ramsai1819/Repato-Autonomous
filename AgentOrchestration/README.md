@@ -110,3 +110,33 @@ $plan = & $tara tara-plan -TaskId REP-001 -CommandId build.release | ConvertFrom
 Use `tara-run -DryRun` after approval to produce the exact `WouldExecute` preview. It does not execute a process or write task state or logs. `tara-fail` records a pre-execution failure while retaining the task and run.
 
 The adapter blocks arbitrary shell text, Revit launch, commits, deletion, add-in changes, production edits, path traversal, external scripts, external services, and caller-selected arguments. It does not authenticate Maya through the operating system, manage branches or worktrees, schedule work, retry commands, kill processes, or impose a child-process timeout. Validation scripts can write their documented repository test artifacts; their behavior remains part of their reviewed source identity. A future version needs an authenticated approval principal and bounded process supervision before broader actions are considered.
+
+## Neil controlled implementation adapter
+
+`Invoke-RepatoNeilAdapter.ps1` plans and applies exact declarative transformations from `NeilActions.json`. Callers provide a task ID and registered action ID; they cannot provide a command, target path, replacement text, patch, or executable. The registry fixes the repository root, explicitly lists eligible production C# files, and stores each action's exact target and replacements. Path traversal, external paths, unknown files, unknown actions, duplicate actions, and malformed transformations fail closed.
+
+Neil may plan only an `in-progress` task assigned to `Neil` at the `implementation` stage. The task branch must exactly match `.git/HEAD`; detached HEAD is rejected. Planning records the current file SHA-256, approved result SHA-256, exact unified before/after diff, action and registry identities, branch, task revision, and plan SHA-256. Validation repeats those checks. Maya approval is bound to the plan hash and latest revision, expires, and is consumed once under the task-store lock immediately before the edit.
+
+Application rechecks the branch, registry, action, source bytes, plan, approval, and task revision, then writes the approved UTF-8 bytes through an atomic replacement. The log records timestamps, duration, changed files, before/after hashes, diff, and errors. If post-write verification fails, the adapter restores the original bytes and marks the run failed. Successful and failed runs remain in task history, and the exclusive store lock prevents concurrent claims.
+
+The currently enabled action IDs are validation-only and exercise the full lifecycle without touching production code:
+
+- `validation.fixture-marker-forward-v1`
+- `validation.fixture-marker-reset-v1`
+
+No production edit action is currently enabled. A future implementation task must add a reviewed, version-controlled action with a concrete required transformation before Neil can change an allowlisted production file.
+
+```powershell
+$neil = '.\AgentOrchestration\Invoke-RepatoNeilAdapter.ps1'
+$task = '.\AgentOrchestration\Invoke-RepatoAgentTask.ps1'
+$plan = & $neil neil-plan -TaskId REP-002 -ActionId validation.fixture-marker-forward-v1 | ConvertFrom-Json
+& $neil neil-validate -TaskId REP-002 -RunId $plan.runId
+& $neil neil-request-approval -TaskId REP-002 -RunId $plan.runId
+& $task approve -TaskId REP-002 -Agent Maya -Reason 'Exact diff reviewed'
+& $neil neil-apply -TaskId REP-002 -RunId $plan.runId -DryRun
+& $neil neil-apply -TaskId REP-002 -RunId $plan.runId
+```
+
+The operations are `neil-plan`, `neil-validate`, `neil-preview`, `neil-request-approval`, `neil-apply`, and `neil-fail`. Dry-run application returns the exact changed-file list, hashes, and diff without editing a file, changing task state, or creating a log.
+
+The adapter cannot create arbitrary patches, add or delete files, rename files, run commands, commit, launch Revit, modify add-ins, contact external services, or edit outside the registry. It does not authenticate Maya through the operating system, merge multiple files in one atomic filesystem transaction, or resolve merge conflicts. Registry changes remain ordinary reviewed repository changes and are not self-authorizing.
