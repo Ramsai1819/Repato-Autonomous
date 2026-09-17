@@ -11,4 +11,3 @@ function Start-JointExecution([string]$StoreRoot,[string]$TaskId,[string]$Approv
 function Reconcile-Joint([string]$StoreRoot,[string]$TaskId){Get-SupervisorStatus $StoreRoot $TaskId}
 function Fail-Joint([string]$StoreRoot,[string]$TaskId,[string]$ApprovalId,[string]$ErrorDetails){if([string]::IsNullOrWhiteSpace($ErrorDetails)){throw 'Failure details required.'};Invoke-RepatoStoreMutation $StoreRoot {param($d,$p)$t=Find-RepatoTask $d $TaskId;$q=Get-Joint $t $ApprovalId;$q.status='failed';$q.errorDetails=$ErrorDetails;Add-RepatoHistory $t 'joint-failed' 'Maya' $ErrorDetails;$q}}
 Export-ModuleMember -Function New-JointPlan,Request-JointApproval,Validate-JointApproval,Get-JointPreview,Start-JointExecution,Reconcile-Joint,Fail-Joint
-

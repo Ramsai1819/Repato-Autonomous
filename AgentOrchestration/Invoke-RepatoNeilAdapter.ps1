@@ -17,7 +17,9 @@ $result=switch($Operation){
     'neil-validate'{Test-NeilPlan $StoreRoot $TaskId $RunId -DryRun:$DryRun}
     'neil-preview'{Get-NeilPreview $StoreRoot $TaskId $RunId}
     'neil-request-approval'{Request-NeilApproval $StoreRoot $TaskId $RunId $ExpiryMinutes -DryRun:$DryRun}
-    'neil-apply'{Invoke-NeilApply $StoreRoot $TaskId $RunId -DryRun:$DryRun}
+    'neil-apply'{if($JointApprovalId){Import-Module (Join-Path  'Repato.JointApproval.psm1') -Force;Validate-JointApproval   };Invoke-NeilApply $StoreRoot $TaskId $RunId -DryRun:$DryRun}
     'neil-fail'{Fail-NeilRun $StoreRoot $TaskId $RunId $ErrorDetails -DryRun:$DryRun}
 }
 $result|ConvertTo-Json -Depth 20
+
+
