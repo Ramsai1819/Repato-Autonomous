@@ -1,4 +1,4 @@
-Import-Module (Join-Path $PSScriptRoot 'Repato.AgentOrchestration.psm1') -Force -WarningAction SilentlyContinue
+Import-Module (Join-Path $PSScriptRoot 'Repato.AgentOrchestration.psm1') -WarningAction SilentlyContinue
 
 $script:TaraRepositoryRoot='C:\Repato-Autonomous\Source'
 $script:TaraRegistryPath=Join-Path $PSScriptRoot 'TaraCommands.json'

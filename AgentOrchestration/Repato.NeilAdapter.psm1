@@ -1,4 +1,4 @@
-Import-Module (Join-Path $PSScriptRoot 'Repato.AgentOrchestration.psm1') -Force -WarningAction SilentlyContinue
+Import-Module (Join-Path $PSScriptRoot 'Repato.AgentOrchestration.psm1') -WarningAction SilentlyContinue
 
 $script:NeilRepositoryRoot='C:\Repato-Autonomous\Source'
 $script:NeilRegistryPath=Join-Path $PSScriptRoot 'NeilActions.json'
