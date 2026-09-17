@@ -1,0 +1,5 @@
+[CmdletBinding()]
+param([Parameter(Mandatory)][ValidateSet('tara-plan','tara-validate','tara-preview','tara-request-approval','tara-run','tara-fail')][string]$Operation,[Parameter(Mandatory)][string]$TaskId,[string]$RunId,[string]$CommandId,[ValidateRange(1,1440)][int]$ExpiryMinutes=30,[string]$ErrorDetails,[string]$StoreRoot=(Join-Path $PSScriptRoot 'Store'),[switch]$DryRun)
+$ErrorActionPreference='Stop';Import-Module (Join-Path $PSScriptRoot 'Repato.TaraAdapter.psm1') -Force -WarningAction SilentlyContinue
+$result=switch($Operation){'tara-plan'{New-TaraPlan $StoreRoot $TaskId $CommandId -DryRun:$DryRun};'tara-validate'{Test-TaraPlan $StoreRoot $TaskId $RunId -DryRun:$DryRun};'tara-preview'{Get-TaraPreview $StoreRoot $TaskId $RunId};'tara-request-approval'{Request-TaraApproval $StoreRoot $TaskId $RunId $ExpiryMinutes -DryRun:$DryRun};'tara-run'{Invoke-TaraRun $StoreRoot $TaskId $RunId -DryRun:$DryRun};'tara-fail'{Fail-TaraRun $StoreRoot $TaskId $RunId $ErrorDetails -DryRun:$DryRun}}
+$result|ConvertTo-Json -Depth 20

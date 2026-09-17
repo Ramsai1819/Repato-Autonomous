@@ -79,3 +79,34 @@ $plan = & $executor executor-plan -TaskId REP-001 -Agent Neil -Actions validate-
 ```
 
 The executor remains local and single-machine. It does not run autonomous agent processes, create worktrees, inspect diffs, authenticate approvers through the operating system, or provide a transactional database across both JSON files. See `EXECUTOR.md` for the complete action and approval contract.
+
+## Tara controlled execution adapter
+
+`Invoke-RepatoTaraAdapter.ps1` is the first executor that may start local processes. It is limited to the fixed repository root `C:\Repato-Autonomous\Source` and resolves every command from `TaraCommands.json`; callers cannot supply an executable, arguments, working directory, or script path. Registered scripts must be repository-owned `Test-*.ps1` validation scripts (plus the isolated failure fixture used by adapter regression tests). The adapter never uses `Invoke-Expression`.
+
+Allowed command IDs are:
+
+- `build.release`: the required Release build of `Forma.RevitConnector.csproj` with the approved Revit 2025 install path.
+- `script.<registered-path>`: an exact script listed in `TaraCommands.json`.
+- `syntax.powershell`: parse all repository PowerShell sources.
+- `git.diff-check`, `git.status`, `git.log`, and `git.diff`: fixed read-only Git inspections. No Git ref, path, or extra argument can be supplied.
+
+Each plan records the executable, fixed argument array, registry SHA-256, command SHA-256 (including the executable and registered script hashes), plan SHA-256, and task revision. Tara must own the task, and its workflow stage must match the command. Maya approval is required for every real run and is bound to that plan and revision. The adapter checks the approval, command registry, script identity, stage, assignment, and exclusive task-store lock immediately before starting the process. Approval expires, is consumed once, and becomes invalid after any task or plan change.
+
+The adapter records UTC start/end times, duration, stdout, stderr, exit code, command identity, and build artifact paths and hashes in `AgentOrchestration/Logs`. Logs are retained for successful and failed commands. A nonzero exit marks the run and task failed without deleting prior state or evidence. The exclusive store lock and terminal run state reject concurrent and duplicate execution.
+
+```powershell
+$tara = '.\AgentOrchestration\Invoke-RepatoTaraAdapter.ps1'
+$task = '.\AgentOrchestration\Invoke-RepatoAgentTask.ps1'
+
+$plan = & $tara tara-plan -TaskId REP-001 -CommandId build.release | ConvertFrom-Json
+& $tara tara-validate -TaskId REP-001 -RunId $plan.runId
+& $tara tara-request-approval -TaskId REP-001 -RunId $plan.runId
+& $task approve -TaskId REP-001 -Agent Maya -Reason 'Exact build plan reviewed'
+& $tara tara-preview -TaskId REP-001 -RunId $plan.runId
+& $tara tara-run -TaskId REP-001 -RunId $plan.runId
+```
+
+Use `tara-run -DryRun` after approval to produce the exact `WouldExecute` preview. It does not execute a process or write task state or logs. `tara-fail` records a pre-execution failure while retaining the task and run.
+
+The adapter blocks arbitrary shell text, Revit launch, commits, deletion, add-in changes, production edits, path traversal, external scripts, external services, and caller-selected arguments. It does not authenticate Maya through the operating system, manage branches or worktrees, schedule work, retry commands, kill processes, or impose a child-process timeout. Validation scripts can write their documented repository test artifacts; their behavior remains part of their reviewed source identity. A future version needs an authenticated approval principal and bounded process supervision before broader actions are considered.
