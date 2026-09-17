@@ -1,0 +1,2 @@
+$ErrorActionPreference='Stop';Import-Module (Join-Path $PSScriptRoot 'Repato.QaAddinDeployment.psm1') -Force
+$a=Join-Path $PSScriptRoot 'DeploymentFixtures\artifact.source';$m=Join-Path $PSScriptRoot 'DeploymentFixtures\manifest.source';$r=Invoke-QaAddinDeployment $a $m -DryRun;if($r.SideEffectsPerformed){throw 'Dry-run side effects'};$blocked=$false;try{Invoke-QaAddinDeployment $a $m}catch{$blocked=$true};if(!$blocked){throw 'Confirmation gate failed'};'QA profile deployment gate checks passed: 2'
