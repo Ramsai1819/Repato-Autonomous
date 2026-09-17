@@ -1,0 +1,10 @@
+$ErrorActionPreference='Stop'
+$h=$PSScriptRoot
+Import-Module (Join-Path $h 'Repato.AgentOrchestration.psm1') -Force -WarningAction SilentlyContinue
+Import-Module (Join-Path $h 'Repato.Deployment.v4.psm1') -Force -WarningAction SilentlyContinue
+$root=Join-Path ([IO.Path]::GetTempPath()) ('repato-v4-rb-'+[guid]::NewGuid().ToString('N'));$target=Join-Path $root 'target';$store=Join-Path $root 'store';New-Item $target -ItemType Directory -Force|Out-Null
+$fx=Join-Path $h 'DeploymentFixtures';foreach($n in @('artifact.source','manifest.source','artifact.target','manifest.target')){Copy-Item (Join-Path $fx $n) (Join-Path $target $n)}
+try{$id='V4-RB-'+[guid]::NewGuid().ToString('N');New-RepatoTask $store $id $id deployment 'feat/maya-deployment-orchestration' maya|Out-Null;Claim-RepatoTask $store $id Neil|Out-Null;Update-RepatoTask $store $id 'in-progress' implementation Neil $null $null|Out-Null;Update-RepatoTask $store $id 'in-progress' 'build-checks' Neil $null $null|Out-Null;Update-RepatoTask $store $id passed qa Tara $null $null|Out-Null
+$p=New-DeployPlan $store $id (Join-Path $target 'artifact.source') (Join-Path $target 'manifest.source') -TargetRoot $target;$w=New-DeployWorkflow $store $p;$null=Request-DeployWorkflowApproval $store $id $w.workflowId;Approve-DeployWorkflow $store $id $w.workflowId|Out-Null;$w=Get-DeployWorkflow $store $id $w.workflowId;$w=Invoke-DeployWorkflowBackup $store $id $w.workflowId $w.approvalId;$w=Invoke-DeployWorkflowApply $store $id $w.workflowId $w.approvalId
+Set-Content (Join-Path $target 'artifact.target') 'temporary mismatch';$w=Invoke-DeployWorkflowRollback $store $id $w.workflowId $w.approvalId;$r=Get-DeployWorkflow $store $id $w.workflowId
+if($r.stage -ne 'failed'){throw 'Expected terminal failed stage.'};if((Get-FileHash (Join-Path $target 'artifact.target')).Hash -ne $p.artifactSha256){throw 'Artifact was not restored.'};$w2=Invoke-DeployWorkflowRollback $store $id $w.workflowId $w.approvalId;if($w2.stage -ne 'failed'){throw 'Rollback was not idempotent.'};'Deployment v4 rollback runtime checks passed: 4'}finally{if(Test-Path $root){Remove-Item $root -Recurse -Force}}
