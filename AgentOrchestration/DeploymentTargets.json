@@ -1,6 +1,1 @@
-{
-  "schemaVersion": 1,
-  "targets": [
-    {"targetId":"qa-local-artifact","kind":"qa","path":"QA/TestDeployments/Repato.Revit.dll","revit":false}
-  ]
-}
+{"schemaVersion":1,"targets":[{"targetId":"qa-local-fixture","kind":"fixture","path":"AgentOrchestration/DeploymentFixtures","revit":false}]}
