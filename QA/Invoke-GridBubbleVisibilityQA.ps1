@@ -148,7 +148,7 @@ $runDirectory = Assert-ChildPath (Join-Path $runsRoot ('grid-bubble-' + $request
 New-Item -ItemType Directory -Path $runDirectory | Out-Null
 $model = Join-Path $runDirectory 'model.rvt'
 Copy-Item -LiteralPath $fixture -Destination $model
-@{ fixtureId = 'GridBubbleVisibilityEmpty'; sourceSha256 = $fixtureHash } | ConvertTo-Json | Set-Content -LiteralPath ($model + '.fixture.json') -Encoding UTF8
+@{ fixtureId = 'GridBubbleVisibilityEmpty'; sourceSha256 = $fixtureHash; requiredGridNames = @('A','B','C','D','1','2','3','4') } | ConvertTo-Json -Depth 3 | Set-Content -LiteralPath ($model + '.fixture.json') -Encoding UTF8
 $requestPath = Join-Path $runDirectory 'grid-bubble.request.json'
 @{ requestId = $requestId; testId = $testId; modelPath = $model; assemblySha256 = (Get-Sha256 $installedDll);
     expiresUtc = [DateTimeOffset]::UtcNow.AddSeconds([Math]::Max($TimeoutSeconds, 900) + 300).ToString('O'); addinIsolation = $isolation } |
