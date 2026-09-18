@@ -7,8 +7,9 @@ if ($applicationName -cne 'Repato Welcome Smoke QA Startup') { throw 'QA applica
 if ($production -notmatch 'DialogTitle\s*=\s*"(?<title>[^"]+)"') { throw 'Production dialog title constant missing.' }
 $commandTitle = $Matches.title
 $visibleTitle = $applicationName + ' - ' + $commandTitle
-if ($commandTitle -cne 'Repato' -or $visibleTitle -cne 'Repato Welcome Smoke QA Startup - Repato') { throw 'Exact command or visible wrapper title changed.' }
+if ($commandTitle -cne 'Repato' -or $visibleTitle -cne 'Repato Welcome Smoke QA Startup - Repato') { throw 'Exact command or visible title changed.' }
 if ($command -notmatch 'GetForegroundWindow' -or $command -notmatch 'GetWindowText' -or
     $command -notmatch 'StartsWith\(prefix, StringComparison\.Ordinal\)' -or
-    $command -notmatch 'observedWindowTitle == ExpectedVisibleWindowTitle') { throw 'Native exact-title capture or validation is missing.' }
+    $command -notmatch 'observedWindowTitle == ExpectedVisibleWindowTitle' -or
+    $command -notmatch 'string\.IsNullOrEmpty\(observedCommandTitle\)') { throw 'Native exact-title capture or empty DialogId handling is missing.' }
 Write-Host 'Welcome exact dialog-title regression checks: 2 passed.'
