@@ -9,7 +9,7 @@ $root=Join-Path $env:TEMP ('maya-qa-bootstrap-test-'+[guid]::NewGuid().ToString(
 try {
     $args=@('-Operation','qa-bootstrap','-QaWorkflowId','create-levels','-RunId',$run,'-StoreRoot',$store,'-TaskId',$task);$one=Invoke-JsonChild $args
     foreach($n in 'StoreRoot','TaskId','WorkflowId','QaWorkflowId','RunId'){if(!$one.$n){throw "Bootstrap omitted $n."}}
-    if($one.QaWorkflowId -ne 'create-levels' -or $one.Stage -ne 'planned'){throw 'Bootstrap identity/stage mismatch.'}
+    if($one.QaWorkflowId -ne 'create-levels' -or $one.Stage -ne 'planned'){throw 'Bootstrap identity/stage mismatch.'};$taskRecord=Get-Content (Join-Path $one.StoreRoot 'tasks.json') -Raw|ConvertFrom-Json|Select-Object -ExpandProperty tasks|Where-Object taskId -ceq $one.TaskId;$qaApproval=@($taskRecord.approvalRequests|Where-Object {$_.action -ceq 'qa-run' -and $_.status -ceq 'approved'});if($qaApproval.Count -ne 1){throw 'Tara QA approval was not persisted.'};$wf=@($taskRecord.deploymentWorkflows|Where-Object workflowId -ceq $one.WorkflowId);if($wf.Count -ne 1 -or $wf[0].qaApprovalStatus -ne 'approved'){throw 'Workflow QA approval binding missing.'}
     $duplicate=Invoke-JsonChild $args -ExpectFailure;if($duplicate.ExitCode -eq 0){throw 'Duplicate bootstrap accepted.'}
     $wrong=Invoke-JsonChild @('-Operation','qa-bootstrap','-QaWorkflowId','unsupported','-RunId','wrong','-StoreRoot',(Join-Path $root 'wrong')) -ExpectFailure
     $dry=Invoke-JsonChild @('-Operation','qa-bootstrap','-QaWorkflowId','create-levels','-RunId','dry','-StoreRoot',(Join-Path $root 'dry'),'-DryRun');if($dry.SideEffectsPerformed -or (Test-Path (Join-Path $root 'dry'))){throw 'Bootstrap dry-run wrote state.'}
