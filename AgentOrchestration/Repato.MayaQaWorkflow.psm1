@@ -91,7 +91,7 @@ function Invoke-MayaQaIntake {
     $mutation = @(Invoke-RepatoWorkflowMutation $StoreRoot $TaskId $WorkflowId $workflow.workflowRevision $task.revision {
         param($current)
         $current | Add-Member -NotePropertyName qaBuildStatus -NotePropertyValue $status -Force
-        $current | Add-Member -NotePropertyName qaBuildEvidence -NotePropertyValue ([pscustomobject]@{BuildRequestId=$current.qaBuildRequest.BuildRequestId;StartedUtc=$started;FinishedUtc=$finished;Command=$command;Configuration='Release';ExitCode=$exit;ArtifactPath=$artifact;ArtifactSha256=$(if(Test-Path $artifact){(Get-FileHash $artifact -Algorithm SHA256).Hash}else{$null});WarningCount=$warningCount;ErrorCount=$errorCount}) -Force
+        $current | Add-Member -NotePropertyName qaBuildEvidence -NotePropertyValue ([pscustomobject]@{BuildRequestId=$current.qaBuildRequest.BuildRequestId;StartedUtc=$started;FinishedUtc=$finished;Command=$command;Configuration='Release';ExitCode=$exit;ArtifactPath=$artifact;ArtifactSha256=$(if(Test-Path $artifact){(Get-FileHash $artifact -Algorithm SHA256).Hash}else{$null});ManifestPath=$workflow.manifestPath;ManifestSha256=$(if(Test-Path $workflow.manifestPath){(Get-FileHash $workflow.manifestPath -Algorithm SHA256).Hash}else{$null});WarningCount=$warningCount;ErrorCount=$errorCount}) -Force
         return $current
     })[-1]
     if ($status -ne 'succeeded') { throw "Release build failed with exit code $exit." }
@@ -139,7 +139,7 @@ function New-MayaQaBootstrap { param([Parameter(Mandatory)][string]$QaWorkflowId
     $null=Request-RepatoTaskApproval $store $TaskId 'qa-run' 'maya';$null=Resolve-RepatoTaskApproval $store $TaskId approve 'Maya' 'Tara QA passed; Maya authorized supervised QA run';$qaData=Read-RepatoTaskStore $store;$qaTask=Find-RepatoTask $qaData $TaskId;$qaApproval=@($qaTask.approvalRequests|Where-Object {$_.action -ceq 'qa-run' -and $_.status -ceq 'approved'})[-1];if(!$qaApproval){throw 'QA approval was not persisted.'}
     $target=Join-Path $store 'TargetRoot';New-Item -ItemType Directory -Path $target -Force|Out-Null;$artifact=Join-Path $target 'artifact.bin';$manifest=Join-Path $target 'manifest.addin';Set-Content $artifact 'fixture artifact';Set-Content $manifest 'fixture manifest'
     $plan=New-DeployPlan $store $TaskId $artifact $manifest -TargetRoot $target;$w=New-DeployWorkflow $store $plan;$d=Read-RepatoTaskStore $store;$t=Find-RepatoTask $d $TaskId;$w=@(Invoke-RepatoWorkflowMutation $store $TaskId $w.workflowId $w.workflowRevision $t.revision {param($x)$x|Add-Member -NotePropertyName qaApprovalId -NotePropertyValue $qaApproval.requestId -Force;$x|Add-Member -NotePropertyName qaApprovalStatus -NotePropertyValue 'approved' -Force;return $x})[-1];$w=$w.Workflow
-    $d=Read-RepatoTaskStore $store; $t=Find-RepatoTask $d $TaskId; $evidence=@(Invoke-RepatoWorkflowMutation $store $TaskId $w.workflowId $w.workflowRevision $t.revision { param($x) $x|Add-Member -NotePropertyName qaBuildEvidence -NotePropertyValue ([pscustomobject]@{ArtifactPath=$artifact;ArtifactSha256=(Get-FileHash $artifact -Algorithm SHA256).Hash;ManifestPath=$manifest;ManifestSha256=(Get-FileHash $manifest -Algorithm SHA256).Hash;SourceBranch='current';CommitId='uncommitted';BuildStatus='succeeded'}) -Force; return $x })[-1]; $w=$evidence.Workflow
+    $d=Read-RepatoTaskStore $store; $t=Find-RepatoTask $d $TaskId; $evidence=@(Invoke-RepatoWorkflowMutation $store $TaskId $w.workflowId $w.workflowRevision $t.revision { param($x) $x|Add-Member -NotePropertyName qaBuildStatus -NotePropertyValue 'succeeded' -Force; $x|Add-Member -NotePropertyName qaBuildEvidence -NotePropertyValue ([pscustomobject]@{ArtifactPath=$artifact;ArtifactSha256=(Get-FileHash $artifact -Algorithm SHA256).Hash;ManifestPath=$manifest;ManifestSha256=(Get-FileHash $manifest -Algorithm SHA256).Hash;SourceBranch='current';CommitId='uncommitted';BuildStatus='succeeded'}) -Force; return $x })[-1]; $w=$evidence.Workflow
     [pscustomobject]@{StoreRoot=$store;TaskId=$TaskId;WorkflowId=$w.workflowId;QaWorkflowId=$QaWorkflowId;RunId=$RunId;Stage=$w.stage;PlanId=$plan.planId;PlanHash=(Get-DeployPlanHash $plan);SideEffectsPerformed=$true}
 }
 function Assert-MayaQaPath { param([string]$Path,[string]$Root)
@@ -150,7 +150,7 @@ function New-MayaQaRun { param([Parameter(Mandatory)][string]$StoreRoot,[Paramet
     $def=Get-MayaQaWorkflowDefinition $QaWorkflowId; if ($RunId -notmatch '^[A-Za-z0-9][A-Za-z0-9_-]{0,79}$'){throw 'Invalid QA run ID.'}
     $w=Get-DeployWorkflow $StoreRoot $TaskId $WorkflowId
     if ($DryRun) { return [pscustomobject]@{WorkflowId=$WorkflowId;RunId=$RunId;Stage=$w.stage;SideEffectsPerformed=$false} }
-    if ($w.PSObject.Properties.Name -notcontains 'qaBuildEvidence' -or $w.qaBuildEvidence.BuildStatus -ne 'succeeded') { throw 'Valid Neil build evidence is required before QA run planning.' }
+    if ($w.PSObject.Properties.Name -notcontains 'qaBuildEvidence' -or $w.PSObject.Properties.Name -notcontains 'qaBuildStatus' -or $w.qaBuildStatus -ne 'succeeded') { throw 'Valid Neil build evidence is required before QA run planning.' }
     foreach($pair in @(@($w.qaBuildEvidence.ArtifactPath,$w.qaBuildEvidence.ArtifactSha256),@($w.qaBuildEvidence.ManifestPath,$w.qaBuildEvidence.ManifestSha256))){if(!(Test-Path -LiteralPath $pair[0] -PathType Leaf) -or (Get-FileHash -LiteralPath $pair[0] -Algorithm SHA256).Hash -ine $pair[1]){throw 'Neil build evidence hash validation failed.'}}
     $qa=Get-MayaQaRoot; $runs=Join-Path $qa 'TestRuns'; if(!(Test-Path -LiteralPath $runs)){New-Item -ItemType Directory -Path $runs -Force|Out-Null}; $run=[IO.Path]::GetFullPath((Join-Path $runs ($WorkflowId+'-'+$RunId))); $runsPrefix=([IO.Path]::GetFullPath($runs)).TrimEnd('\')+'\'; if(!$run.StartsWith($runsPrefix,[StringComparison]::OrdinalIgnoreCase)){throw "Run path escaped QA TestRuns: $run"}
     if (Test-Path -LiteralPath $run) { throw 'QA run directory already exists.' }
@@ -203,7 +203,19 @@ function New-MayaQaReceipt { param([Parameter(Mandatory)][string]$StoreRoot,[Par
     $serialized|Set-Content -LiteralPath $receiptPath -Encoding UTF8;$d=Read-RepatoTaskStore $StoreRoot;$t=Find-RepatoTask $d $TaskId;$m=@(Invoke-RepatoWorkflowMutation $StoreRoot $TaskId $WorkflowId $w.workflowRevision $t.revision {param($x)$x|Add-Member -NotePropertyName qaReceiptPath -NotePropertyValue $receiptPath -Force;$x|Add-Member -NotePropertyName qaReceiptSha256 -NotePropertyValue $final -Force;return $x})[-1]
     [pscustomobject]@{ReceiptPath=$receiptPath;FinalReceiptSha256=$final;Duplicate=$false;WorkflowRevision=$m.Workflow.workflowRevision;TaskRevision=$m.TaskRevision;SideEffectsPerformed=$true}
 }
-function Get-MayaQaReceiptStatus { param([Parameter(Mandatory)][string]$StoreRoot,[Parameter(Mandatory)][string]$TaskId,[Parameter(Mandatory)][string]$WorkflowId,[Parameter(Mandatory)][string]$QaWorkflowId,[switch]$DryRun)
+function Get-MayaQaBuildEvidenceStatus {
+    param([object]$Workflow)
+    if ($Workflow.PSObject.Properties.Name -notcontains 'qaBuildEvidence' -or $Workflow.PSObject.Properties.Name -notcontains 'qaBuildStatus' -or $Workflow.qaBuildStatus -ne 'succeeded') { throw 'Neil build evidence is missing or failed.' }
+    $e = $Workflow.qaBuildEvidence
+    $checks = @()
+    foreach ($pair in @(@('Artifact',$e.ArtifactPath,$e.ArtifactSha256),@('Manifest',$e.ManifestPath,$e.ManifestSha256))) {
+        $valid = Test-Path -LiteralPath $pair[1] -PathType Leaf
+        if ($valid) { $valid = (Get-FileHash -LiteralPath $pair[1] -Algorithm SHA256).Hash -ieq $pair[2] }
+        $checks += [pscustomobject]@{Name=$pair[0];Path=$pair[1];ExpectedSha256=$pair[2];Valid=$valid}
+        if (-not $valid) { throw "Neil build evidence hash mismatch: $($pair[0])" }
+    }
+    [pscustomobject]@{BuildStatus=$Workflow.qaBuildStatus;ArtifactPath=$e.ArtifactPath;ArtifactSha256=$e.ArtifactSha256;ManifestPath=$e.ManifestPath;ManifestSha256=$e.ManifestSha256;SourceBranch=$e.SourceBranch;CommitId=$e.CommitId;HashVerification=$checks}
+}function Get-MayaQaReceiptStatus { param([Parameter(Mandatory)][string]$StoreRoot,[Parameter(Mandatory)][string]$TaskId,[Parameter(Mandatory)][string]$WorkflowId,[Parameter(Mandatory)][string]$QaWorkflowId,[switch]$DryRun)
     $w=Get-DeployWorkflow $StoreRoot $TaskId $WorkflowId;if($DryRun){return [pscustomobject]@{TaskId=$TaskId;WorkflowId=$WorkflowId;QaWorkflowId=$QaWorkflowId;SideEffectsPerformed=$false}}
     if($w.PSObject.Properties.Name -notcontains 'qaReceiptPath' -or [string]::IsNullOrWhiteSpace([string]$w.qaReceiptPath)){throw 'QA receipt is missing.'}
     $receiptPath=[IO.Path]::GetFullPath($w.qaReceiptPath);if(!(Test-Path -LiteralPath $receiptPath -PathType Leaf)){throw 'QA receipt is missing.'};$receipt=Get-Content -LiteralPath $receiptPath -Raw|ConvertFrom-Json
