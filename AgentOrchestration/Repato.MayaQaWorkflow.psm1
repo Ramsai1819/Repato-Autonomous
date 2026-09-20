@@ -261,6 +261,50 @@ function Register-MayaQaReport { param([Parameter(Mandatory)][string]$StoreRoot,
     $m=@(Invoke-RepatoWorkflowMutation $StoreRoot $TaskId $WorkflowId $w.workflowRevision $t.revision {param($x)$e=[pscustomobject]@{CoordinatorRunId=$x.qaRunId;NativeRunId=$j.RunId;TestId=$j.TestId;Status=$j.Status;RollbackStatus=$j.RollbackStatus;Assertions=@($j.Assertions).Count;DocumentPath=[IO.Path]::GetFullPath($j.DocumentPath);FixtureId=$j.FixtureId;FixtureSha256=$j.FixtureSha256;VerifiedUtc=(Get-Date).ToUniversalTime().ToString('O')};$x|Add-Member -NotePropertyName qaReportPath -NotePropertyValue $report -Force;$x|Add-Member -NotePropertyName qaReportSha256 -NotePropertyValue $rh -Force;$x|Add-Member -NotePropertyName qaEvidence -NotePropertyValue $e -Force;$x|Add-Member -NotePropertyName qaVerificationStatus -NotePropertyValue 'verified' -Force;return $x})[-1]
     [pscustomobject]@{WorkflowId=$WorkflowId;QaWorkflowId=$QaWorkflowId;ReportPath=$report;ReportSha256=$rh;Valid=$true;WorkflowRevision=$m.Workflow.workflowRevision;TaskRevision=$m.TaskRevision;SideEffectsPerformed=$true}
 }
+function Submit-MayaQaReport {
+    param(
+        [Parameter(Mandatory)][string]$StoreRoot,
+        [Parameter(Mandatory)][string]$TaskId,
+        [Parameter(Mandatory)][string]$WorkflowId,
+        [Parameter(Mandatory)][string]$QaWorkflowId,
+        [Parameter(Mandatory)][string]$HandoffId,
+        [Parameter(Mandatory)][string]$ReportPath,
+        [switch]$DryRun
+    )
+    $definition = Get-MayaQaWorkflowDefinition $QaWorkflowId
+    if ($DryRun) {
+        return [pscustomobject]@{TaskId=$TaskId;WorkflowId=$WorkflowId;QaWorkflowId=$QaWorkflowId;HandoffId=$HandoffId;ReportPath=$ReportPath;Valid=$false;SubmissionStatus='planned';SideEffectsPerformed=$false}
+    }
+    $workflow = Get-DeployWorkflow $StoreRoot $TaskId $WorkflowId
+    $properties = @($workflow.PSObject.Properties.Name)
+    if ($properties -notcontains 'qaHandoff' -or $properties -notcontains 'qaHandoffId' -or $workflow.qaHandoffId -cne $HandoffId) {
+        throw 'Tara QA handoff identity is invalid.'
+    }
+    if ($workflow.qaHandoff.HandoffStatus -cne 'ready' -or $workflow.qaHandoff.QaWorkflowId -cne $QaWorkflowId -or $workflow.qaHandoff.TaskId -cne $TaskId) {
+        throw 'Tara QA handoff is not valid for this workflow.'
+    }
+    foreach ($item in @(
+        @('artifact', $workflow.qaHandoff.ArtifactPath, $workflow.qaHandoff.ArtifactSha256),
+        @('manifest', $workflow.qaHandoff.ManifestPath, $workflow.qaHandoff.ManifestSha256)
+    )) {
+        if (!(Test-Path -LiteralPath $item[1] -PathType Leaf)) { throw "Handoff $($item[0]) is missing." }
+        if ((Get-FileHash -LiteralPath $item[1] -Algorithm SHA256).Hash -ine [string]$item[2]) { throw "Handoff $($item[0]) hash mismatch." }
+    }
+    if ($properties -contains 'qaReportPath' -and $workflow.qaReportPath) {
+        throw 'QA report has already been submitted.'
+    }
+    $reportsRoot = [IO.Path]::GetFullPath((Join-Path (Get-MayaQaRoot) 'Reports')).TrimEnd('\') + '\'
+    $resolvedReport = [IO.Path]::GetFullPath($ReportPath)
+    if (!$resolvedReport.StartsWith($reportsRoot, [StringComparison]::OrdinalIgnoreCase)) { throw "Path is outside approved QA root: $ReportPath" }
+    if (!(Test-Path -LiteralPath $resolvedReport -PathType Leaf)) { throw 'QA report does not exist.' }
+    $result = Register-MayaQaReport $StoreRoot $TaskId $WorkflowId $QaWorkflowId $resolvedReport
+    [pscustomobject]@{
+        TaskId=$TaskId;WorkflowId=$WorkflowId;QaWorkflowId=$QaWorkflowId;HandoffId=$HandoffId
+        ReportPath=$result.ReportPath;ReportSha256=$result.ReportSha256;NativeRunId=$workflow.qaRunId
+        Valid=$result.Valid;SubmissionStatus='submitted';WorkflowRevision=$result.WorkflowRevision
+        TaskRevision=$result.TaskRevision;SideEffectsPerformed=$true
+    }
+}
 function Complete-MayaQaWorkflow { param([Parameter(Mandatory)][string]$StoreRoot,[Parameter(Mandatory)][string]$TaskId,[Parameter(Mandatory)][string]$WorkflowId,[switch]$DryRun)
     $w=Get-DeployWorkflow $StoreRoot $TaskId $WorkflowId
     $completion = if($w.PSObject.Properties.Name -contains 'qaCompletionStatus'){[string]$w.qaCompletionStatus}else{$null}
@@ -321,4 +365,4 @@ function Invoke-MayaQaOverview { param([Parameter(Mandatory)][ValidateSet('qa-ca
     $result=switch($Route){'qa-catalog-dry-run'{Get-MayaQaCatalogDryRun $WorkflowId};'qa-status'{Get-MayaQaWorkflowStatus $StoreRoot $TaskId $WorkflowId};'qa-receipt-status'{Get-MayaQaReceiptStatus $StoreRoot $TaskId $WorkflowId $QaWorkflowId -DryRun:$DryRun};'qa-dashboard'{Get-MayaQaDashboard $StoreRoot $TaskId $WorkflowId $QaWorkflowId -DryRun:$DryRun}}
     [pscustomobject]@{Operation=$Route;TimestampUtc=(Get-Date).ToUniversalTime().ToString('O');WorkflowId=$WorkflowId;QaWorkflowId=$QaWorkflowId;ResultStatus='ok';SideEffectsPerformed=$false;Result=$result}
 }
-Export-ModuleMember -Function Get-MayaQaWorkflowDefinition,Get-MayaQaWorkflowCatalog,Get-MayaQaCatalogDryRun,Get-MayaQaWorkflowStatus,Invoke-MayaQaIntake,New-MayaQaBuildRequest,Invoke-MayaQaBuildExecute,New-MayaQaHandoff,Get-MayaQaDashboard,Invoke-MayaQaOverview,New-MayaQaBootstrap,New-MayaQaRun,Register-MayaQaReport,Complete-MayaQaWorkflow,New-MayaQaReceipt,Get-MayaQaReceiptStatus
+Export-ModuleMember -Function Get-MayaQaWorkflowDefinition,Get-MayaQaWorkflowCatalog,Get-MayaQaCatalogDryRun,Get-MayaQaWorkflowStatus,Invoke-MayaQaIntake,New-MayaQaBuildRequest,Invoke-MayaQaBuildExecute,New-MayaQaHandoff,Submit-MayaQaReport,Get-MayaQaDashboard,Invoke-MayaQaOverview,New-MayaQaBootstrap,New-MayaQaRun,Register-MayaQaReport,Complete-MayaQaWorkflow,New-MayaQaReceipt,Get-MayaQaReceiptStatus
