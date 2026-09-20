@@ -92,7 +92,7 @@ try {
         }
 
         'qa-build-execute' {
-            Invoke-MayaQaBuild `
+            Invoke-MayaQaBuildExecute `
                 $StoreRoot `
                 $TaskId `
                 $WorkflowId `

@@ -49,24 +49,128 @@ function Invoke-MayaQaIntake {
         DryRun = [bool]$DryRun
     }
 }function New-MayaQaBuildRequest {
-    param([Parameter(Mandatory)][string]$StoreRoot,[Parameter(Mandatory)][string]$TaskId,[Parameter(Mandatory)][string]$WorkflowId,[Parameter(Mandatory)][string]$QaWorkflowId,[Parameter(Mandatory)][string]$UserRequest,[switch]$DryRun)
-    $null = Invoke-MayaQaIntake $TaskId $WorkflowId $QaWorkflowId $UserRequest -DryRun:$true
+    param(
+        [Parameter(Mandatory)]
+        [string]$StoreRoot,
+
+        [Parameter(Mandatory)]
+        [string]$TaskId,
+
+        [Parameter(Mandatory)]
+        [string]$WorkflowId,
+
+        [Parameter(Mandatory)]
+        [string]$QaWorkflowId,
+
+        [string]$UserRequest = '',
+
+        [string]$SourceBranch = 'current',
+
+        [string]$ProjectPath = 'Forma.RevitConnector.csproj',
+
+        [switch]$DryRun
+    )
+
+    if ([string]::IsNullOrWhiteSpace($SourceBranch)) {
+        $SourceBranch = 'current'
+    }
+
+    if ([string]::IsNullOrWhiteSpace($ProjectPath)) {
+        $ProjectPath = 'Forma.RevitConnector.csproj'
+    }
+
+    if ([string]::IsNullOrWhiteSpace($UserRequest)) {
+        $UserRequest = "Please run QA workflow $QaWorkflowId"
+    }
+
+    $null = Invoke-MayaQaIntake `
+        $TaskId `
+        $WorkflowId `
+        $QaWorkflowId `
+        $UserRequest `
+        -DryRun:$true
+
     $requestId = 'build-' + [guid]::NewGuid().ToString('N')
-    if ($DryRun) { return [pscustomobject]@{BuildRequestId=$requestId;TaskId=$TaskId;WorkflowId=$WorkflowId;QaWorkflowId=$QaWorkflowId;BuildStatus='requested';SourceBranch='current';ProjectPath='Forma.RevitConnector.csproj';RequestedArtifact='bin\Release\net8.0-windows\Repato.Revit.dll';SideEffectsPerformed=$false} }
+    $requestedArtifact = 'bin\Release\net8.0-windows\Repato.Revit.dll'
+
+    if ($DryRun) {
+        return [pscustomobject]@{
+            BuildRequestId = $requestId
+            TaskId = $TaskId
+            WorkflowId = $WorkflowId
+            QaWorkflowId = $QaWorkflowId
+            BuildStatus = 'requested'
+            SourceBranch = $SourceBranch
+            ProjectPath = $ProjectPath
+            RequestedArtifact = $requestedArtifact
+            SideEffectsPerformed = $false
+        }
+    }
+
     $workflow = Get-DeployWorkflow $StoreRoot $TaskId $WorkflowId
-    if ($workflow.PSObject.Properties.Name -contains 'qaWorkflowId' -and $workflow.qaWorkflowId -cne $QaWorkflowId) { throw 'Valid QA intake record is missing.' }
-    if ($workflow.PSObject.Properties.Name -contains 'qaBuildRequestId' -and $workflow.qaBuildRequestId) { throw 'Build request already exists.' }
+
+    if ($workflow.PSObject.Properties.Name -contains 'qaWorkflowId' -and
+        $workflow.qaWorkflowId -cne $QaWorkflowId) {
+        throw 'Valid QA intake record is missing.'
+    }
+
+    if ($workflow.PSObject.Properties.Name -contains 'qaBuildRequestId' -and
+        $workflow.qaBuildRequestId) {
+        throw 'Build request already exists.'
+    }
+
     $data = Read-RepatoTaskStore $StoreRoot
     $task = Find-RepatoTask $data $TaskId
-    $mutation = @(Invoke-RepatoWorkflowMutation $StoreRoot $TaskId $WorkflowId $workflow.workflowRevision $task.revision {
+
+    $mutation = @(Invoke-RepatoWorkflowMutation `
+        $StoreRoot `
+        $TaskId `
+        $WorkflowId `
+        $workflow.workflowRevision `
+        $task.revision {
+
         param($current)
-        $current | Add-Member -NotePropertyName qaWorkflowId -NotePropertyValue $QaWorkflowId -Force
-        $current | Add-Member -NotePropertyName qaBuildRequestId -NotePropertyValue $requestId -Force
-        $current | Add-Member -NotePropertyName qaBuildRequest -NotePropertyValue ([pscustomobject]@{BuildRequestId=$requestId;SourceBranch='current';ProjectPath='Forma.RevitConnector.csproj';RequestedArtifact='bin\Release\net8.0-windows\Repato.Revit.dll';BuildStatus='requested';RequestedUtc=(Get-Date).ToUniversalTime().ToString('O')}) -Force
+
+        $current | Add-Member `
+            -NotePropertyName qaWorkflowId `
+            -NotePropertyValue $QaWorkflowId `
+            -Force
+
+        $current | Add-Member `
+            -NotePropertyName qaBuildRequestId `
+            -NotePropertyValue $requestId `
+            -Force
+
+        $current | Add-Member `
+            -NotePropertyName qaBuildRequest `
+            -NotePropertyValue ([pscustomobject]@{
+                BuildRequestId = $requestId
+                SourceBranch = $SourceBranch
+                ProjectPath = $ProjectPath
+                RequestedArtifact = $requestedArtifact
+                BuildStatus = 'requested'
+                RequestedUtc = (Get-Date).ToUniversalTime().ToString('O')
+            }) `
+            -Force
+
         return $current
     })[-1]
-    [pscustomobject]@{BuildRequestId=$requestId;TaskId=$TaskId;WorkflowId=$WorkflowId;QaWorkflowId=$QaWorkflowId;BuildStatus='requested';SourceBranch='current';ProjectPath='Forma.RevitConnector.csproj';RequestedArtifact='bin\Release\net8.0-windows\Repato.Revit.dll';WorkflowRevision=$mutation.Workflow.workflowRevision;TaskRevision=$mutation.TaskRevision;SideEffectsPerformed=$true}
-}function Invoke-MayaQaBuildExecute {
+
+    [pscustomobject]@{
+        BuildRequestId = $requestId
+        TaskId = $TaskId
+        WorkflowId = $WorkflowId
+        QaWorkflowId = $QaWorkflowId
+        BuildStatus = 'requested'
+        SourceBranch = $SourceBranch
+        ProjectPath = $ProjectPath
+        RequestedArtifact = $requestedArtifact
+        WorkflowRevision = $mutation.Workflow.workflowRevision
+        TaskRevision = $mutation.TaskRevision
+        SideEffectsPerformed = $true
+    }
+}
+function Invoke-MayaQaBuildExecute {
     param([Parameter(Mandatory)][string]$StoreRoot,[Parameter(Mandatory)][string]$TaskId,[Parameter(Mandatory)][string]$WorkflowId,[Parameter(Mandatory)][string]$QaWorkflowId,[switch]$DryRun)
     $def = Get-MayaQaWorkflowDefinition $QaWorkflowId
     if ($DryRun) { return [pscustomobject]@{BuildRequestId=('build-' + [guid]::NewGuid().ToString('N'));TaskId=$TaskId;WorkflowId=$WorkflowId;QaWorkflowId=$QaWorkflowId;BuildStatus='planned';SideEffectsPerformed=$false} }
