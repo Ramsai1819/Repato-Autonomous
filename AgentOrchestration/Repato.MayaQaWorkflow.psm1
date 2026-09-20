@@ -48,6 +48,24 @@ function Invoke-MayaQaIntake {
         SideEffectsPerformed = $false
         DryRun = [bool]$DryRun
     }
+}function New-MayaQaBuildRequest {
+    param([Parameter(Mandatory)][string]$StoreRoot,[Parameter(Mandatory)][string]$TaskId,[Parameter(Mandatory)][string]$WorkflowId,[Parameter(Mandatory)][string]$QaWorkflowId,[Parameter(Mandatory)][string]$UserRequest,[switch]$DryRun)
+    $null = Invoke-MayaQaIntake $TaskId $WorkflowId $QaWorkflowId $UserRequest -DryRun:$true
+    $requestId = 'build-' + [guid]::NewGuid().ToString('N')
+    if ($DryRun) { return [pscustomobject]@{BuildRequestId=$requestId;TaskId=$TaskId;WorkflowId=$WorkflowId;QaWorkflowId=$QaWorkflowId;BuildStatus='requested';SourceBranch='current';ProjectPath='Forma.RevitConnector.csproj';RequestedArtifact='bin\Release\net8.0-windows\Repato.Revit.dll';SideEffectsPerformed=$false} }
+    $workflow = Get-DeployWorkflow $StoreRoot $TaskId $WorkflowId
+    if ($workflow.PSObject.Properties.Name -contains 'qaWorkflowId' -and $workflow.qaWorkflowId -cne $QaWorkflowId) { throw 'Valid QA intake record is missing.' }
+    if ($workflow.PSObject.Properties.Name -contains 'qaBuildRequestId' -and $workflow.qaBuildRequestId) { throw 'Build request already exists.' }
+    $data = Read-RepatoTaskStore $StoreRoot
+    $task = Find-RepatoTask $data $TaskId
+    $mutation = @(Invoke-RepatoWorkflowMutation $StoreRoot $TaskId $WorkflowId $workflow.workflowRevision $task.revision {
+        param($current)
+        $current | Add-Member -NotePropertyName qaWorkflowId -NotePropertyValue $QaWorkflowId -Force
+        $current | Add-Member -NotePropertyName qaBuildRequestId -NotePropertyValue $requestId -Force
+        $current | Add-Member -NotePropertyName qaBuildRequest -NotePropertyValue ([pscustomobject]@{BuildRequestId=$requestId;SourceBranch='current';ProjectPath='Forma.RevitConnector.csproj';RequestedArtifact='bin\Release\net8.0-windows\Repato.Revit.dll';BuildStatus='requested';RequestedUtc=(Get-Date).ToUniversalTime().ToString('O')}) -Force
+        return $current
+    })[-1]
+    [pscustomobject]@{BuildRequestId=$requestId;TaskId=$TaskId;WorkflowId=$WorkflowId;QaWorkflowId=$QaWorkflowId;BuildStatus='requested';SourceBranch='current';ProjectPath='Forma.RevitConnector.csproj';RequestedArtifact='bin\Release\net8.0-windows\Repato.Revit.dll';WorkflowRevision=$mutation.Workflow.workflowRevision;TaskRevision=$mutation.TaskRevision;SideEffectsPerformed=$true}
 }function Get-MayaQaWorkflowStatus { param([Parameter(Mandatory)][string]$StoreRoot,[Parameter(Mandatory)][string]$TaskId,[Parameter(Mandatory)][string]$WorkflowId)
     $w=Get-DeployWorkflow $StoreRoot $TaskId $WorkflowId; $qaId=if($w.PSObject.Properties.Name -contains 'qaWorkflowId'){$w.qaWorkflowId}else{$null}; $def=if($qaId){Get-MayaQaWorkflowDefinition $qaId}else{$null}
     [pscustomobject]@{WorkflowId=$WorkflowId;TaskId=$TaskId;QaWorkflowId=$qaId;Stage=$w.stage;DeploymentStatus=$w.status;QaRunId=$(if($w.PSObject.Properties.Name -contains 'qaRunId'){$w.qaRunId}else{$null});QaVerificationStatus=$(if($w.PSObject.Properties.Name -contains 'qaVerificationStatus'){$w.qaVerificationStatus}else{$null});QaCompletionStatus=$(if($w.PSObject.Properties.Name -contains 'qaCompletionStatus'){$w.qaCompletionStatus}else{$null});Capabilities=$(if($def){@($def.Capabilities)}else{@()});SupervisedExecutionRequired=$true;RevitLaunchByCoordinator=$false;RealDeploymentByCoordinator=$false;DryRunSupported=$true}
@@ -153,4 +171,4 @@ function Invoke-MayaQaOverview { param([Parameter(Mandatory)][ValidateSet('qa-ca
     $result=switch($Route){'qa-catalog-dry-run'{Get-MayaQaCatalogDryRun $WorkflowId};'qa-status'{Get-MayaQaWorkflowStatus $StoreRoot $TaskId $WorkflowId};'qa-receipt-status'{Get-MayaQaReceiptStatus $StoreRoot $TaskId $WorkflowId $QaWorkflowId -DryRun:$DryRun};'qa-dashboard'{Get-MayaQaDashboard $StoreRoot $TaskId $WorkflowId $QaWorkflowId -DryRun:$DryRun}}
     [pscustomobject]@{Operation=$Route;TimestampUtc=(Get-Date).ToUniversalTime().ToString('O');WorkflowId=$WorkflowId;QaWorkflowId=$QaWorkflowId;ResultStatus='ok';SideEffectsPerformed=$false;Result=$result}
 }
-Export-ModuleMember -Function Get-MayaQaWorkflowDefinition,Get-MayaQaWorkflowCatalog,Get-MayaQaCatalogDryRun,Get-MayaQaWorkflowStatus,Invoke-MayaQaIntake,Get-MayaQaDashboard,Invoke-MayaQaOverview,New-MayaQaBootstrap,New-MayaQaRun,Register-MayaQaReport,Complete-MayaQaWorkflow,New-MayaQaReceipt,Get-MayaQaReceiptStatus
+Export-ModuleMember -Function Get-MayaQaWorkflowDefinition,Get-MayaQaWorkflowCatalog,Get-MayaQaCatalogDryRun,Get-MayaQaWorkflowStatus,Invoke-MayaQaIntake,New-MayaQaBuildRequest,Get-MayaQaDashboard,Invoke-MayaQaOverview,New-MayaQaBootstrap,New-MayaQaRun,Register-MayaQaReport,Complete-MayaQaWorkflow,New-MayaQaReceipt,Get-MayaQaReceiptStatus
