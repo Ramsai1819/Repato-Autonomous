@@ -65,12 +65,13 @@ internal sealed class CreateLevelsWindow : Window
         panel.Children.Add(
             new TextBlock
             {
-                Text = "One level per line: Level Name | Elevation in mm"
+                Text = "One level per line: Level Name<TAB>Elevation in mm"
             });
 
         _levelData = new WpfTextBox
         {
             AcceptsReturn = true,
+            AcceptsTab = true,
             Height = 220,
             Margin = new Thickness(0, 12, 0, 12)
         };
