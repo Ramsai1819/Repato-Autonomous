@@ -82,21 +82,24 @@ try {
 
         'qa-build-request' {
             New-MayaQaBuildRequest `
-                $StoreRoot `
-                $TaskId `
-                $WorkflowId `
-                $QaWorkflowId `
-                $SourceBranch `
-                $ProjectPath `
+                -StoreRoot $StoreRoot `
+                -TaskId $TaskId `
+                -WorkflowId $WorkflowId `
+                -QaWorkflowId $QaWorkflowId `
+                -UserRequest $UserRequest `
+                -SourceBranch $SourceBranch `
+                -ProjectPath $ProjectPath `
                 -DryRun:$DryRun
         }
 
         'qa-build-execute' {
             Invoke-MayaQaBuildExecute `
-                $StoreRoot `
-                $TaskId `
-                $WorkflowId `
-                $QaWorkflowId `
+                -StoreRoot $StoreRoot `
+                -TaskId $TaskId `
+                -WorkflowId $WorkflowId `
+                -QaWorkflowId $QaWorkflowId `
+                -SourceBranch $SourceBranch `
+                -ProjectPath $ProjectPath `
                 -DryRun:$DryRun
         }
 

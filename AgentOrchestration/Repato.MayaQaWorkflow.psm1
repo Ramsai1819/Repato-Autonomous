@@ -171,16 +171,20 @@ function Invoke-MayaQaIntake {
     }
 }
 function Invoke-MayaQaBuildExecute {
-    param([Parameter(Mandatory)][string]$StoreRoot,[Parameter(Mandatory)][string]$TaskId,[Parameter(Mandatory)][string]$WorkflowId,[Parameter(Mandatory)][string]$QaWorkflowId,[switch]$DryRun)
+    param([Parameter(Mandatory)][string]$StoreRoot,[Parameter(Mandatory)][string]$TaskId,[Parameter(Mandatory)][string]$WorkflowId,[Parameter(Mandatory)][string]$QaWorkflowId,[string]$SourceBranch='current',[string]$ProjectPath='Forma.RevitConnector.csproj',[switch]$DryRun)
+    if ([string]::IsNullOrWhiteSpace($SourceBranch)) { $SourceBranch = 'current' }
+    if ([string]::IsNullOrWhiteSpace($ProjectPath)) { $ProjectPath = 'Forma.RevitConnector.csproj' }
     $def = Get-MayaQaWorkflowDefinition $QaWorkflowId
     if ($DryRun) { return [pscustomobject]@{BuildRequestId=('build-' + [guid]::NewGuid().ToString('N'));TaskId=$TaskId;WorkflowId=$WorkflowId;QaWorkflowId=$QaWorkflowId;BuildStatus='planned';SideEffectsPerformed=$false} }
     $workflow = Get-DeployWorkflow $StoreRoot $TaskId $WorkflowId
     if ($workflow.PSObject.Properties.Name -notcontains 'qaBuildRequest' -or !$workflow.qaBuildRequest) { throw 'Persisted Neil build request is missing.' }
     if ($workflow.PSObject.Properties.Name -contains 'qaWorkflowId' -and $workflow.qaWorkflowId -cne $QaWorkflowId) { throw 'QA workflow identity mismatch.' }
     if ($workflow.PSObject.Properties.Name -contains 'qaBuildStatus' -and $workflow.qaBuildStatus -eq 'succeeded') { throw 'Build request has already executed.' }
+    if ($workflow.qaBuildRequest.SourceBranch -cne $SourceBranch -or $workflow.qaBuildRequest.ProjectPath -cne $ProjectPath) { throw 'Build request parameters do not match the persisted request.' }
     $root = [IO.Path]::GetFullPath((Join-Path $PSScriptRoot '..'))
     $project = [IO.Path]::GetFullPath((Join-Path $root 'Forma.RevitConnector.csproj'))
-    if ($project -ine [IO.Path]::GetFullPath((Join-Path $root 'Forma.RevitConnector.csproj'))) { throw 'Project path is outside approved workspace.' }
+    $requestedProject = [IO.Path]::GetFullPath((Join-Path $root $workflow.qaBuildRequest.ProjectPath))
+    if ($requestedProject -ine $project) { throw 'Project path is outside approved workspace.' }
     $artifact = [IO.Path]::GetFullPath((Join-Path $root 'bin\Release\net8.0-windows\Repato.Revit.dll'))
     $command = 'dotnet build "' + $project + '" -c Release -p:RevitInstallDir="E:\revit\Revit 2025"'
     if ($DryRun) { return [pscustomobject]@{BuildRequestId=$workflow.qaBuildRequest.BuildRequestId;BuildStatus='planned';Command=$command;Configuration='Release';ArtifactPath=$artifact;SideEffectsPerformed=$false} }
@@ -319,7 +323,7 @@ function New-MayaQaBootstrap { param([Parameter(Mandatory)][string]$QaWorkflowId
     Update-RepatoTask $store $TaskId 'passed' 'qa' 'Tara' $null $null|Out-Null
     $null=Request-RepatoTaskApproval $store $TaskId 'qa-run' 'maya';$null=Resolve-RepatoTaskApproval $store $TaskId approve 'Maya' 'Tara QA passed; Maya authorized supervised QA run';$qaData=Read-RepatoTaskStore $store;$qaTask=Find-RepatoTask $qaData $TaskId;$qaApproval=@($qaTask.approvalRequests|Where-Object {$_.action -ceq 'qa-run' -and $_.status -ceq 'approved'})[-1];if(!$qaApproval){throw 'QA approval was not persisted.'}
     $target=Join-Path $store 'TargetRoot';New-Item -ItemType Directory -Path $target -Force|Out-Null;$artifact=Join-Path $target 'artifact.bin';$manifest=Join-Path $target 'manifest.addin';Set-Content $artifact 'fixture artifact';Set-Content $manifest 'fixture manifest'
-    $plan=New-DeployPlan $store $TaskId $artifact $manifest -TargetRoot $target;$w=New-DeployWorkflow $store $plan;$d=Read-RepatoTaskStore $store;$t=Find-RepatoTask $d $TaskId;$w=@(Invoke-RepatoWorkflowMutation $store $TaskId $w.workflowId $w.workflowRevision $t.revision {param($x)$x|Add-Member -NotePropertyName qaApprovalId -NotePropertyValue $qaApproval.requestId -Force;$x|Add-Member -NotePropertyName qaApprovalStatus -NotePropertyValue 'approved' -Force;return $x})[-1];$w=$w.Workflow
+    $plan=New-DeployPlan $store $TaskId $artifact $manifest -TargetRoot $target;$w=New-DeployWorkflow $store $plan;$d=Read-RepatoTaskStore $store;$t=Find-RepatoTask $d $TaskId;$w=@(Invoke-RepatoWorkflowMutation $store $TaskId $w.workflowId $w.workflowRevision $t.revision {param($x)$x|Add-Member -NotePropertyName qaWorkflowId -NotePropertyValue $QaWorkflowId -Force;$x|Add-Member -NotePropertyName qaRunId -NotePropertyValue $RunId -Force;$x|Add-Member -NotePropertyName qaApprovalId -NotePropertyValue $qaApproval.requestId -Force;$x|Add-Member -NotePropertyName qaApprovalStatus -NotePropertyValue 'approved' -Force;return $x})[-1];$w=$w.Workflow
     $d=Read-RepatoTaskStore $store; $t=Find-RepatoTask $d $TaskId; $evidence=@(Invoke-RepatoWorkflowMutation $store $TaskId $w.workflowId $w.workflowRevision $t.revision { param($x) $x|Add-Member -NotePropertyName qaBuildStatus -NotePropertyValue 'succeeded' -Force; $x|Add-Member -NotePropertyName qaBuildEvidence -NotePropertyValue ([pscustomobject]@{ArtifactPath=$artifact;ArtifactSha256=(Get-FileHash $artifact -Algorithm SHA256).Hash;ManifestPath=$manifest;ManifestSha256=(Get-FileHash $manifest -Algorithm SHA256).Hash;SourceBranch='current';CommitId='uncommitted';BuildStatus='succeeded'}) -Force; return $x })[-1]; $w=$evidence.Workflow
     [pscustomobject]@{StoreRoot=$store;TaskId=$TaskId;WorkflowId=$w.workflowId;QaWorkflowId=$QaWorkflowId;RunId=$RunId;Stage=$w.stage;PlanId=$plan.planId;PlanHash=(Get-DeployPlanHash $plan);SideEffectsPerformed=$true}
 }
