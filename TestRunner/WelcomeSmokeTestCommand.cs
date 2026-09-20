@@ -17,7 +17,7 @@ public sealed class WelcomeSmokeTestCommand : IExternalCommand
 {
     public const string SupportedTestId = "welcome-supervised-dialog-v1";
     internal const string QaApplicationTitle = "Repato Welcome Smoke QA Startup";
-    internal const string ExpectedVisibleWindowTitle = QaApplicationTitle + " - " + RepatoWelcomeCommand.DialogTitle;
+    internal const string ExpectedVisibleWindowTitle = "Repato QA - Welcome Smoke - Repato";
 
     public Result Execute(ExternalCommandData data, ref string message, ElementSet elements)
     {
