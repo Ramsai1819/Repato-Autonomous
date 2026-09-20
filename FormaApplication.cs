@@ -32,6 +32,16 @@ public sealed class RepatoApplication : IExternalApplication
             ToolTip = "Create named vertical and horizontal grids from Tab-separated millimetre positions."
         };
 
+        var createLevelsButton = new PushButtonData(
+            "RepatoCreateLevels",
+            "Create\nLevels",
+            assemblyPath,
+            "Repato.Revit.CreateLevelsCommand"
+        )
+        {
+            ToolTip = "Create named levels from the Repato level definition workflow."
+        };
+
         var bubbleVisibilityButton = new PushButtonData(
             "RepatoGridBubbleVisibility",
             "Grid Bubble\nVisibility",
@@ -63,6 +73,7 @@ public sealed class RepatoApplication : IExternalApplication
         };
 
         panel.AddItem(createGridsButton);
+        panel.AddItem(createLevelsButton);
         panel.AddItem(bubbleVisibilityButton);
         panel.AddItem(offsetBubblesButton);
         panel.AddItem(resequenceButton);
