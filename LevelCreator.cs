@@ -21,11 +21,9 @@ public static class LevelCreator
                 continue;
             }
 
-            var parts = line.Split(
-                '|',
-                2,
-                StringSplitOptions.TrimEntries
-            );
+            var parts = line.Contains('\t')
+                ? line.Split('\t', 2, StringSplitOptions.TrimEntries)
+                : line.Split('|', 2, StringSplitOptions.TrimEntries);
 
             if (
                 parts.Length != 2 ||
