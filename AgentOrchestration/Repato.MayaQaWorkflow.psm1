@@ -143,12 +143,6 @@ function New-MayaQaHandoff {
             throw "Built $($item[0]) hash mismatch."
         }
     }
-    foreach ($required in @('qaModelPath', 'qaSidecarPath')) {
-        if ($properties -notcontains $required -or [string]::IsNullOrWhiteSpace([string]$workflow.$required) -or !(Test-Path -LiteralPath $workflow.$required -PathType Leaf)) {
-            throw "QA $required is missing."
-        }
-    }
-
     $artifactHash = (Get-FileHash -LiteralPath $evidence.ArtifactPath -Algorithm SHA256).Hash
     $manifestHash = (Get-FileHash -LiteralPath $evidence.ManifestPath -Algorithm SHA256).Hash
     $handoffId = 'handoff-' + [guid]::NewGuid().ToString('N')
@@ -169,8 +163,8 @@ function New-MayaQaHandoff {
             FixtureId = $definition.FixtureId
             NativeTestId = $definition.TestId
             PreparationScript = $definition.Prep
-            ModelPath = $current.qaModelPath
-            SidecarPath = $current.qaSidecarPath
+            ModelPath = $(if($current.PSObject.Properties.Name -contains 'qaModelPath'){$current.qaModelPath}else{$null})
+            SidecarPath = $(if($current.PSObject.Properties.Name -contains 'qaSidecarPath'){$current.qaSidecarPath}else{$null})
             CoordinatorRunId = $coordinatorRunId
             HandoffStatus = 'ready'
             CreatedUtc = (Get-Date).ToUniversalTime().ToString('O')
@@ -192,8 +186,8 @@ function New-MayaQaHandoff {
         FixtureId = $definition.FixtureId
         NativeTestId = $definition.TestId
         PreparationScript = $definition.Prep
-        ModelPath = $workflow.qaModelPath
-        SidecarPath = $workflow.qaSidecarPath
+        ModelPath = $(if($properties -contains 'qaModelPath'){$workflow.qaModelPath}else{$null})
+        SidecarPath = $(if($properties -contains 'qaSidecarPath'){$workflow.qaSidecarPath}else{$null})
         CoordinatorRunId = $coordinatorRunId
         HandoffStatus = 'ready'
         WorkflowRevision = $mutation.Workflow.workflowRevision
@@ -243,7 +237,7 @@ function New-MayaQaRun { param([Parameter(Mandatory)][string]$StoreRoot,[Paramet
     $side=[ordered]@{fixtureId=$def.FixtureId;sourceSha256=$fixtureHash}; if($QaWorkflowId -eq 'grid-bubble-visibility-v1' -or $QaWorkflowId -eq 'grid-bubble-offset-v1'){$side.requiredGridNames=@('A','B','C','D','1','2','3','4')}; if($QaWorkflowId -eq 'grid-resequence-v1'){$side.requiredGridNames=@('1','2','3','3.2','4','A','A.1','B','C')}
     $side | ConvertTo-Json -Depth 5 | Set-Content -LiteralPath $sidecar -Encoding UTF8
     if($WorkflowId -eq 'grid-bubble-visibility-v1'){$check=Get-Content -LiteralPath $sidecar -Raw|ConvertFrom-Json;$expected=@('A','B','C','D','1','2','3','4');if($check.fixtureId -cne 'GridBubbleVisibilityEmpty' -or $check.sourceSha256 -ine $fixtureHash -or (@($check.requiredGridNames)-join '|') -cne ($expected -join '|')){throw 'Grid Bubble Visibility sidecar identity is invalid.'}}    $d=Read-RepatoTaskStore $StoreRoot;$t=Find-RepatoTask $d $TaskId
-    $m=@(Invoke-RepatoWorkflowMutation $StoreRoot $TaskId $WorkflowId $w.workflowRevision $t.revision { param($x) foreach($v in @(@('qaWorkflowId',$QaWorkflowId),@('qaRunId',$RunId),@('qaModelPath',$model),@('qaSidecarPath',$sidecar),@('qaFixtureId',$def.FixtureId),@('qaFixtureSha256',$fixtureHash),@('qaTestId',$def.TestId),@('qaReportPath',$null),@('qaReportSha256',$null),@('qaEvidence',$null),@('qaVerificationStatus',$null),@('qaCompletionStatus',$null),@('qaCompletedUtc',$null))){$x|Add-Member -NotePropertyName $v[0] -NotePropertyValue $v[1] -Force}; return $x })[-1]
+    $m=@(Invoke-RepatoWorkflowMutation $StoreRoot $TaskId $WorkflowId $w.workflowRevision $t.revision { param($x) foreach($v in @(@('qaWorkflowId',$QaWorkflowId),@('qaRunId',$RunId),@('qaModelPath',$model),@('qaSidecarPath',$sidecar),@('qaFixtureId',$def.FixtureId),@('qaFixtureSha256',$fixtureHash),@('qaTestId',$def.TestId),@('qaReportPath',$null),@('qaReportSha256',$null),@('qaEvidence',$null),@('qaVerificationStatus',$null),@('qaCompletionStatus',$null),@('qaCompletedUtc',$null))){$x|Add-Member -NotePropertyName $v[0] -NotePropertyValue $v[1] -Force}; if($x.PSObject.Properties.Name -contains 'qaHandoff' -and $x.qaHandoff){$x.qaHandoff | Add-Member -NotePropertyName ModelPath -NotePropertyValue $model -Force;$x.qaHandoff | Add-Member -NotePropertyName SidecarPath -NotePropertyValue $sidecar -Force}; return $x })[-1]
     [pscustomobject]@{WorkflowId=$WorkflowId;QaWorkflowId=$QaWorkflowId;RunId=$RunId;ModelPath=$model;SidecarPath=$sidecar;FixtureId=$def.FixtureId;FixtureSha256=$fixtureHash;Stage=$m.Workflow.stage;WorkflowRevision=$m.Workflow.workflowRevision;TaskRevision=$m.TaskRevision;SideEffectsPerformed=$true}
 }
 function Register-MayaQaReport { param([Parameter(Mandatory)][string]$StoreRoot,[Parameter(Mandatory)][string]$TaskId,[Parameter(Mandatory)][string]$WorkflowId,[Parameter(Mandatory)][string]$QaWorkflowId,[Parameter(Mandatory)][string]$ReportPath,[switch]$DryRun)
