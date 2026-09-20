@@ -96,6 +96,28 @@ function Invoke-MayaQaIntake {
     })[-1]
     if ($status -ne 'succeeded') { throw "Release build failed with exit code $exit." }
     [pscustomobject]@{BuildRequestId=$workflow.qaBuildRequest.BuildRequestId;BuildStatus=$status;Command=$command;Configuration='Release';ExitCode=$exit;ArtifactPath=$artifact;ArtifactSha256=$mutation.Workflow.qaBuildEvidence.ArtifactSha256;WarningCount=$warningCount;ErrorCount=$errorCount;WorkflowRevision=$mutation.Workflow.workflowRevision;TaskRevision=$mutation.TaskRevision;SideEffectsPerformed=$true}
+}function New-MayaQaHandoff {
+    param([Parameter(Mandatory)][string]$StoreRoot,[Parameter(Mandatory)][string]$TaskId,[Parameter(Mandatory)][string]$WorkflowId,[Parameter(Mandatory)][string]$QaWorkflowId,[switch]$DryRun)
+    $def = Get-MayaQaWorkflowDefinition $QaWorkflowId
+    if ($DryRun) { return [pscustomobject]@{HandoffId=('handoff-' + [guid]::NewGuid().ToString('N'));TaskId=$TaskId;WorkflowId=$WorkflowId;QaWorkflowId=$QaWorkflowId;HandoffStatus='planned';SideEffectsPerformed=$false} }
+    $workflow = Get-DeployWorkflow $StoreRoot $TaskId $WorkflowId
+    if ($workflow.PSObject.Properties.Name -notcontains 'qaBuildRequest' -or !$workflow.qaBuildRequest) { throw 'Completed Neil build request is missing.' }
+    if ($workflow.PSObject.Properties.Name -notcontains 'qaBuildEvidence' -or $workflow.qaBuildStatus -ne 'succeeded') { throw 'Successful Neil build execution is required.' }
+    if ($workflow.PSObject.Properties.Name -contains 'qaHandoffId' -and $workflow.qaHandoffId) { throw 'Tara QA handoff already exists.' }
+    $evidence = $workflow.qaBuildEvidence
+    if (!(Test-Path -LiteralPath $evidence.ArtifactPath -PathType Leaf)) { throw 'Built artifact is missing.' }
+    $actual = (Get-FileHash -LiteralPath $evidence.ArtifactPath -Algorithm SHA256).Hash
+    if ($actual -ine $evidence.ArtifactSha256) { throw 'Built artifact hash mismatch.' }
+    $handoffId = 'handoff-' + [guid]::NewGuid().ToString('N')
+    $coordinatorRunId = 'qa-run-' + [guid]::NewGuid().ToString('N')
+    $data = Read-RepatoTaskStore $StoreRoot; $task = Find-RepatoTask $data $TaskId
+    $mutation = @(Invoke-RepatoWorkflowMutation $StoreRoot $TaskId $WorkflowId $workflow.workflowRevision $task.revision {
+        param($current)
+        $current | Add-Member -NotePropertyName qaHandoffId -NotePropertyValue $handoffId -Force
+        $current | Add-Member -NotePropertyName qaHandoff -NotePropertyValue ([pscustomobject]@{HandoffId=$handoffId;TaskId=$TaskId;BuildRequestId=$current.qaBuildRequest.BuildRequestId;ArtifactPath=$evidence.ArtifactPath;ArtifactSha256=$actual;QaWorkflowId=$QaWorkflowId;FixtureId=$def.FixtureId;NativeTestId=$def.TestId;PreparationScript=$def.Prep;CoordinatorRunId=$coordinatorRunId;HandoffStatus='ready';CreatedUtc=(Get-Date).ToUniversalTime().ToString('O')}) -Force
+        return $current
+    })[-1]
+    [pscustomobject]@{HandoffId=$handoffId;TaskId=$TaskId;WorkflowId=$WorkflowId;BuildRequestId=$workflow.qaBuildRequest.BuildRequestId;ArtifactPath=$evidence.ArtifactPath;ArtifactSha256=$actual;QaWorkflowId=$QaWorkflowId;FixtureId=$def.FixtureId;NativeTestId=$def.TestId;PreparationScript=$def.Prep;CoordinatorRunId=$coordinatorRunId;HandoffStatus='ready';WorkflowRevision=$mutation.Workflow.workflowRevision;TaskRevision=$mutation.TaskRevision;SideEffectsPerformed=$true}
 }function Get-MayaQaWorkflowStatus { param([Parameter(Mandatory)][string]$StoreRoot,[Parameter(Mandatory)][string]$TaskId,[Parameter(Mandatory)][string]$WorkflowId)
     $w=Get-DeployWorkflow $StoreRoot $TaskId $WorkflowId; $qaId=if($w.PSObject.Properties.Name -contains 'qaWorkflowId'){$w.qaWorkflowId}else{$null}; $def=if($qaId){Get-MayaQaWorkflowDefinition $qaId}else{$null}
     [pscustomobject]@{WorkflowId=$WorkflowId;TaskId=$TaskId;QaWorkflowId=$qaId;Stage=$w.stage;DeploymentStatus=$w.status;QaRunId=$(if($w.PSObject.Properties.Name -contains 'qaRunId'){$w.qaRunId}else{$null});QaVerificationStatus=$(if($w.PSObject.Properties.Name -contains 'qaVerificationStatus'){$w.qaVerificationStatus}else{$null});QaCompletionStatus=$(if($w.PSObject.Properties.Name -contains 'qaCompletionStatus'){$w.qaCompletionStatus}else{$null});Capabilities=$(if($def){@($def.Capabilities)}else{@()});SupervisedExecutionRequired=$true;RevitLaunchByCoordinator=$false;RealDeploymentByCoordinator=$false;DryRunSupported=$true}
@@ -201,4 +223,4 @@ function Invoke-MayaQaOverview { param([Parameter(Mandatory)][ValidateSet('qa-ca
     $result=switch($Route){'qa-catalog-dry-run'{Get-MayaQaCatalogDryRun $WorkflowId};'qa-status'{Get-MayaQaWorkflowStatus $StoreRoot $TaskId $WorkflowId};'qa-receipt-status'{Get-MayaQaReceiptStatus $StoreRoot $TaskId $WorkflowId $QaWorkflowId -DryRun:$DryRun};'qa-dashboard'{Get-MayaQaDashboard $StoreRoot $TaskId $WorkflowId $QaWorkflowId -DryRun:$DryRun}}
     [pscustomobject]@{Operation=$Route;TimestampUtc=(Get-Date).ToUniversalTime().ToString('O');WorkflowId=$WorkflowId;QaWorkflowId=$QaWorkflowId;ResultStatus='ok';SideEffectsPerformed=$false;Result=$result}
 }
-Export-ModuleMember -Function Get-MayaQaWorkflowDefinition,Get-MayaQaWorkflowCatalog,Get-MayaQaCatalogDryRun,Get-MayaQaWorkflowStatus,Invoke-MayaQaIntake,New-MayaQaBuildRequest,Invoke-MayaQaBuildExecute,Get-MayaQaDashboard,Invoke-MayaQaOverview,New-MayaQaBootstrap,New-MayaQaRun,Register-MayaQaReport,Complete-MayaQaWorkflow,New-MayaQaReceipt,Get-MayaQaReceiptStatus
+Export-ModuleMember -Function Get-MayaQaWorkflowDefinition,Get-MayaQaWorkflowCatalog,Get-MayaQaCatalogDryRun,Get-MayaQaWorkflowStatus,Invoke-MayaQaIntake,New-MayaQaBuildRequest,Invoke-MayaQaBuildExecute,New-MayaQaHandoff,Get-MayaQaDashboard,Invoke-MayaQaOverview,New-MayaQaBootstrap,New-MayaQaRun,Register-MayaQaReport,Complete-MayaQaWorkflow,New-MayaQaReceipt,Get-MayaQaReceiptStatus
