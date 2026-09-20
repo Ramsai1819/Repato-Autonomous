@@ -87,7 +87,7 @@ function Verify-WelcomeResult([string]$Path){
     $required=@('addin-isolation','fixture-content-policy','safety-gate','command-result','dialog-observed','dialog-window-title','dialog-title','dialog-message','screenshot-dialog','model-file-unchanged','model-elements-unchanged','rollback-status','baseline-restored')
     foreach($id in $required){if(@($report.Assertions|Where-Object{$_.Id-ceq$id-and$_.Passed-eq$true}).Count-ne1){throw "Missing or failed assertion: $id"}}
     if($report.Inputs.Mode-cne'Supervised UI'-or$report.Inputs.ExpectedTitle-cne'Repato'-or
-        $report.Inputs.ExpectedVisibleWindowTitle-cne'Repato Welcome Smoke QA Startup - Repato'-or
+        $report.Inputs.ExpectedVisibleWindowTitle-cne'Repato QA - Welcome Smoke - Repato'-or
         $report.Inputs.ExpectedMessage-cne"Repato is running successfully.`n`nNext: Create Grids."){throw 'Unexpected dialog contract.'}
     if(@($report.Screenshots).Count-ne1-or$report.Screenshots[0].Phase-cne'dialog'){throw 'Dialog screenshot evidence missing.'}
     $image=Assert-RepatoQaChildPath $report.Screenshots[0].Path $screenshotsRoot $true

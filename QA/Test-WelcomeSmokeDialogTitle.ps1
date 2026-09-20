@@ -6,8 +6,8 @@ $applicationName = [string](@($manifest.RevitAddIns.AddIn | Where-Object Type -e
 if ($applicationName -cne 'Repato Welcome Smoke QA Startup') { throw 'QA application wrapper title changed.' }
 if ($production -notmatch 'DialogTitle\s*=\s*"(?<title>[^"]+)"') { throw 'Production dialog title constant missing.' }
 $commandTitle = $Matches.title
-$visibleTitle = $applicationName + ' - ' + $commandTitle
-if ($commandTitle -cne 'Repato' -or $visibleTitle -cne 'Repato Welcome Smoke QA Startup - Repato') { throw 'Exact command or visible title changed.' }
+$visibleTitle = 'Repato QA - Welcome Smoke - Repato'
+if ($commandTitle -cne 'Repato' -or $visibleTitle -cne 'Repato QA - Welcome Smoke - Repato') { throw 'Exact command or visible title changed.' }
 if ($command -notmatch 'GetForegroundWindow' -or $command -notmatch 'GetWindowText' -or
     $command -notmatch 'StartsWith\(prefix, StringComparison\.Ordinal\)' -or
     $command -notmatch 'observedWindowTitle == ExpectedVisibleWindowTitle' -or
