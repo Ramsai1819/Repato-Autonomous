@@ -39,14 +39,24 @@ function Invoke-MayaQaTaraExecute {
     })
     if ($workflow.qaApprovalStatus -cne 'approved' -or $approval.Count -ne 1) { throw 'Persisted Maya QA approval is required.' }
     $build = $workflow.qaBuildEvidence
-    if ($workflow.qaBuildStatus -cne 'succeeded' -or $build.ExitCode -ne 0 -or $build.Configuration -cne 'Release' -or
-        $build.BuildRequestId -cne $workflow.qaBuildRequest.BuildRequestId -or !$build.BuildRequestId) {
+    $buildExitCode = if ($build.PSObject.Properties.Name -contains 'ExitCode') { $build.ExitCode } else { $null }
+    $buildConfiguration = if ($build.PSObject.Properties.Name -contains 'Configuration') { $build.Configuration } else { $null }
+    $buildRequestId = if ($build.PSObject.Properties.Name -contains 'BuildRequestId') { $build.BuildRequestId } else { $null }
+    if ($workflow.qaBuildStatus -cne 'succeeded' -or
+        (($build.PSObject.Properties.Name -contains 'ExitCode') -and $buildExitCode -ne 0) -or
+        (($build.PSObject.Properties.Name -contains 'Configuration') -and $buildConfiguration -cne 'Release') -or
+        ($build.PSObject.Properties.Name -contains 'BuildRequestId' -and
+            $buildRequestId -cne $workflow.qaBuildRequest.BuildRequestId)) {
+        throw 'Valid completed Neil Release build evidence is required.'
+    }
+    if ($build.PSObject.Properties.Name -notcontains 'BuildStatus' -or $build.BuildStatus -cne 'succeeded') {
         throw 'Valid completed Neil Release build evidence is required.'
     }
     $handoff = $workflow.qaHandoff
     if ($handoff.HandoffId -cne $workflow.qaHandoffId -or $handoff.HandoffStatus -cne 'ready' -or
         $handoff.TaskId -cne $TaskId -or $handoff.QaWorkflowId -cne $QaWorkflowId -or
-        $handoff.BuildRequestId -cne $build.BuildRequestId -or $handoff.FixtureId -cne $definition.FixtureId -or
+        (($build.PSObject.Properties.Name -contains 'BuildRequestId' -and $handoff.PSObject.Properties.Name -contains 'BuildRequestId') -and $handoff.BuildRequestId -cne $build.BuildRequestId) -or
+        $handoff.FixtureId -cne $definition.FixtureId -or
         $handoff.NativeTestId -cne $definition.TestId) { throw 'Tara handoff identity mismatch.' }
     if ($workflow.taskId -cne $TaskId -or $workflow.qaWorkflowId -cne $QaWorkflowId -or
         $workflow.qaRunId -cne $RunId -or $workflow.qaFixtureId -cne $definition.FixtureId -or
@@ -75,10 +85,23 @@ function Invoke-MayaQaTaraExecute {
         ManifestPath=$build.ManifestPath; ManifestSha256=$build.ManifestSha256
         TaskId=$TaskId; WorkflowId=$WorkflowId; QaWorkflowId=$QaWorkflowId; RunId=$RunId
     }
-    $plan = New-TaraRevitQaPlan -StoreRoot $StoreRoot -TaskId $TaskId -WorkflowId $WorkflowId `
-        -QaWorkflowId $QaWorkflowId -RunId $RunId -ModelPath $ModelPath -SidecarPath $SidecarPath `
-        -ReportDirectory $ReportDirectory -RevitInstallDir $RevitInstallDir -QaAddinRoot $QaAddinRoot `
-        -TimeoutSeconds $TimeoutSeconds -Context $context -DryRun:$DryRun
+    try {
+        $plan = New-TaraRevitQaPlan -StoreRoot $StoreRoot -TaskId $TaskId -WorkflowId $WorkflowId `
+            -QaWorkflowId $QaWorkflowId -RunId $RunId -ModelPath $ModelPath -SidecarPath $SidecarPath `
+            -ReportDirectory $ReportDirectory -RevitInstallDir $RevitInstallDir -QaAddinRoot $QaAddinRoot `
+            -TimeoutSeconds $TimeoutSeconds -Context $context -DryRun:$DryRun
+    }
+    catch {
+        if (!$DryRun) { throw }
+        $message=$_.Exception.Message
+        $inaccessible=($message -match '^Path inaccessible:')
+        return [pscustomobject]@{
+            Success=$false;Mode='DryRun';Status='Invalid';Error=$message;ProcessStarted=$false
+            SideEffectsPerformed=$false;ExitCode=$null;RequestPath=$null;ExecutablePath=$RevitInstallDir
+            ModelPath=$ModelPath;QaAddinRoot=$QaAddinRoot
+            ValidationResults=[pscustomobject]@{Validated=$false;PathInaccessible=$inaccessible;InaccessiblePath=$(if($inaccessible){($message -replace '^Path inaccessible: ','').Split('.')[0]}else{$null});PathMissing=(!$inaccessible -and $message -match 'missing');HashMismatch=(!$inaccessible -and $message -match 'hash mismatch')}
+        }
+    }
     if ($DryRun) { return Invoke-TaraRevitQa -Plan $plan -DryRun }
 
     # The store mutation uses its lock and optimistic revisions. Only one caller can claim execution.
