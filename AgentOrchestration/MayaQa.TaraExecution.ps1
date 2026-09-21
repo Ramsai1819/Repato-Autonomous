@@ -29,7 +29,7 @@ function Invoke-MayaQaTaraExecute {
     if ($properties -contains 'qaTaraExecutionStatus' -and $workflow.qaTaraExecutionStatus) {
         throw 'Duplicate Tara execution rejected. Preserve the existing execution and prepare a new workflow for any retry.'
     }
-    foreach ($required in @('qaBuildRequest','qaBuildEvidence','qaBuildStatus','qaHandoff','qaHandoffId',
+    foreach ($required in @('qaBuildEvidence','qaBuildStatus','qaHandoff','qaHandoffId',
         'qaRunId','qaWorkflowId','qaModelPath','qaSidecarPath','qaFixtureId','qaFixtureSha256','qaTestId',
         'qaApprovalId','qaApprovalStatus')) {
         if ($properties -notcontains $required -or !$workflow.$required) { throw "Required Tara prerequisite is missing: $required" }
@@ -42,11 +42,13 @@ function Invoke-MayaQaTaraExecute {
     $buildExitCode = if ($build.PSObject.Properties.Name -contains 'ExitCode') { $build.ExitCode } else { $null }
     $buildConfiguration = if ($build.PSObject.Properties.Name -contains 'Configuration') { $build.Configuration } else { $null }
     $buildRequestId = if ($build.PSObject.Properties.Name -contains 'BuildRequestId') { $build.BuildRequestId } else { $null }
+    $requestBuildId = if ($properties -contains 'qaBuildRequest' -and $workflow.qaBuildRequest -and $workflow.qaBuildRequest.PSObject.Properties.Name -contains 'BuildRequestId') { $workflow.qaBuildRequest.BuildRequestId } else { $null }
+    if ([string]::IsNullOrWhiteSpace([string]$buildRequestId)) { $buildRequestId=$requestBuildId }
+    if ([string]::IsNullOrWhiteSpace([string]$buildRequestId)) { throw 'Valid Neil build evidence is missing BuildRequestId.' }
     if ($workflow.qaBuildStatus -cne 'succeeded' -or
         (($build.PSObject.Properties.Name -contains 'ExitCode') -and $buildExitCode -ne 0) -or
         (($build.PSObject.Properties.Name -contains 'Configuration') -and $buildConfiguration -cne 'Release') -or
-        ($build.PSObject.Properties.Name -contains 'BuildRequestId' -and
-            $buildRequestId -cne $workflow.qaBuildRequest.BuildRequestId)) {
+        ($build.PSObject.Properties.Name -contains 'BuildRequestId' -and $buildRequestId -cne $build.BuildRequestId)) {
         throw 'Valid completed Neil Release build evidence is required.'
     }
     if ($build.PSObject.Properties.Name -notcontains 'BuildStatus' -or $build.BuildStatus -cne 'succeeded') {
@@ -55,7 +57,7 @@ function Invoke-MayaQaTaraExecute {
     $handoff = $workflow.qaHandoff
     if ($handoff.HandoffId -cne $workflow.qaHandoffId -or $handoff.HandoffStatus -cne 'ready' -or
         $handoff.TaskId -cne $TaskId -or $handoff.QaWorkflowId -cne $QaWorkflowId -or
-        (($build.PSObject.Properties.Name -contains 'BuildRequestId' -and $handoff.PSObject.Properties.Name -contains 'BuildRequestId') -and $handoff.BuildRequestId -cne $build.BuildRequestId) -or
+        (($handoff.PSObject.Properties.Name -contains 'BuildRequestId') -and $handoff.BuildRequestId -cne $buildRequestId) -or
         $handoff.FixtureId -cne $definition.FixtureId -or
         $handoff.NativeTestId -cne $definition.TestId) { throw 'Tara handoff identity mismatch.' }
     if ($workflow.taskId -cne $TaskId -or $workflow.qaWorkflowId -cne $QaWorkflowId -or

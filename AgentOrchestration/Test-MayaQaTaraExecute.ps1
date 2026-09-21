@@ -47,11 +47,15 @@ try {
     Assert-Test ($dry.Success -and $dry.Mode -ceq 'DryRun' -and $dry.Status -ceq 'DryRun' -and $null -eq $dry.ExitCode -and !$dry.ProcessStarted -and !$dry.SideEffectsPerformed -and $null -eq $dry.Error -and $dry.ValidationResults.Validated) 'Dry-run contract failed'
     $counts=& $testModule {@($script:mutations,$script:launches)}
     Assert-Test ($counts[0] -eq 0 -and $counts[1] -eq 0) 'Dry-run crossed mutation/process boundary'
+    $savedBuildRequest=$workflow.qaBuildRequest;$workflow.PSObject.Properties.Remove('qaBuildRequest')
+    $evidenceOnly=Invoke-MayaQaTaraExecute @parameters -DryRun
+    Assert-Test ($evidenceOnly.Success -and $evidenceOnly.Mode -ceq 'DryRun' -and $null -eq $evidenceOnly.ExitCode -and !$evidenceOnly.ProcessStarted) 'Evidence-only persisted build shape was rejected'
+    $workflow | Add-Member NoteProperty qaBuildRequest $savedBuildRequest -Force
     & $testModule {$script:inaccessible=$true}
     $denied=Invoke-MayaQaTaraExecute @parameters -DryRun
     Assert-Test (!$denied.Success -and $denied.Mode -ceq 'DryRun' -and !$denied.ProcessStarted -and !$denied.SideEffectsPerformed -and $null -eq $denied.ExitCode -and $denied.ValidationResults.PathInaccessible -and $denied.Error -match 'Access was denied') 'Inaccessible QA path was not reported structurally'
     & $testModule {$script:inaccessible=$false}
-    foreach($property in @('qaBuildRequest','qaBuildEvidence','qaHandoff','qaRunId','qaApprovalId')){
+    foreach($property in @('qaBuildEvidence','qaHandoff','qaRunId','qaApprovalId')){
         $saved=$workflow.$property;$workflow.$property=$null
         Assert-Rejected {Invoke-MayaQaTaraExecute @parameters -DryRun} 'prerequisite is missing'
         $workflow.$property=$saved
