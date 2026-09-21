@@ -186,6 +186,7 @@ function Invoke-MayaQaBuildExecute {
     $requestedProject = [IO.Path]::GetFullPath((Join-Path $root $workflow.qaBuildRequest.ProjectPath))
     if ($requestedProject -ine $project) { throw 'Project path is outside approved workspace.' }
     $artifact = [IO.Path]::GetFullPath((Join-Path $root 'bin\Release\net8.0-windows\Repato.Revit.dll'))
+    $artifactManifest = [IO.Path]::GetFullPath((Join-Path $root 'Repato.addin'))
     $command = 'dotnet build "' + $project + '" -c Release -p:RevitInstallDir="E:\revit\Revit 2025"'
     if ($DryRun) { return [pscustomobject]@{BuildRequestId=$workflow.qaBuildRequest.BuildRequestId;BuildStatus='planned';Command=$command;Configuration='Release';ArtifactPath=$artifact;SideEffectsPerformed=$false} }
     $started = (Get-Date).ToUniversalTime().ToString('O')
@@ -194,16 +195,18 @@ function Invoke-MayaQaBuildExecute {
     $finished = (Get-Date).ToUniversalTime().ToString('O')
     $warningCount = @($lines | Where-Object { $_ -match '(?i)warning' }).Count
     $errorCount = @($lines | Where-Object { $_ -match '(?i)error' }).Count
-    if ($exit -ne 0 -or !(Test-Path -LiteralPath $artifact -PathType Leaf)) { $status='failed' } else { $status='succeeded' }
+    $manifestValid=$false
+    if(Test-Path -LiteralPath $artifactManifest -PathType Leaf){try{$manifestValid=([xml](Get-Content -LiteralPath $artifactManifest -Raw)).DocumentElement.Name -ceq 'RevitAddIns'}catch{$manifestValid=$false}}
+    if ($exit -ne 0 -or !(Test-Path -LiteralPath $artifact -PathType Leaf) -or !$manifestValid) { $status='failed' } else { $status='succeeded' }
     $data = Read-RepatoTaskStore $StoreRoot; $task = Find-RepatoTask $data $TaskId
     $mutation = @(Invoke-RepatoWorkflowMutation $StoreRoot $TaskId $WorkflowId $workflow.workflowRevision $task.revision {
         param($current)
         $current | Add-Member -NotePropertyName qaBuildStatus -NotePropertyValue $status -Force
-        $current | Add-Member -NotePropertyName qaBuildEvidence -NotePropertyValue ([pscustomobject]@{BuildRequestId=$current.qaBuildRequest.BuildRequestId;StartedUtc=$started;FinishedUtc=$finished;Command=$command;Configuration='Release';ExitCode=$exit;ArtifactPath=$artifact;ArtifactSha256=$(if(Test-Path $artifact){(Get-FileHash $artifact -Algorithm SHA256).Hash}else{$null});ManifestPath=$workflow.manifestPath;ManifestSha256=$(if(Test-Path $workflow.manifestPath){(Get-FileHash $workflow.manifestPath -Algorithm SHA256).Hash}else{$null});WarningCount=$warningCount;ErrorCount=$errorCount}) -Force
+        $current | Add-Member -NotePropertyName qaBuildEvidence -NotePropertyValue ([pscustomobject]@{BuildRequestId=$current.qaBuildRequest.BuildRequestId;StartedUtc=$started;FinishedUtc=$finished;Command=$command;Configuration='Release';ExitCode=$exit;ArtifactPath=$artifact;ArtifactSha256=$(if(Test-Path $artifact){(Get-FileHash $artifact -Algorithm SHA256).Hash}else{$null});ManifestPath=$artifactManifest;ManifestSha256=$(if(Test-Path $artifactManifest){(Get-FileHash $artifactManifest -Algorithm SHA256).Hash}else{$null});BuildStatus=$status;WarningCount=$warningCount;ErrorCount=$errorCount}) -Force
         return $current
     })[-1]
     if ($status -ne 'succeeded') { throw "Release build failed with exit code $exit." }
-    [pscustomobject]@{BuildRequestId=$workflow.qaBuildRequest.BuildRequestId;BuildStatus=$status;Command=$command;Configuration='Release';ExitCode=$exit;ArtifactPath=$artifact;ArtifactSha256=$mutation.Workflow.qaBuildEvidence.ArtifactSha256;WarningCount=$warningCount;ErrorCount=$errorCount;WorkflowRevision=$mutation.Workflow.workflowRevision;TaskRevision=$mutation.TaskRevision;SideEffectsPerformed=$true}
+    [pscustomobject]@{BuildRequestId=$workflow.qaBuildRequest.BuildRequestId;BuildStatus=$status;Command=$command;Configuration='Release';ExitCode=$exit;ArtifactPath=$artifact;ArtifactSha256=$mutation.Workflow.qaBuildEvidence.ArtifactSha256;ArtifactManifestPath=$artifactManifest;ArtifactManifestSha256=$mutation.Workflow.qaBuildEvidence.ManifestSha256;ManifestPath=$artifactManifest;ManifestSha256=$mutation.Workflow.qaBuildEvidence.ManifestSha256;WarningCount=$warningCount;ErrorCount=$errorCount;WorkflowRevision=$mutation.Workflow.workflowRevision;TaskRevision=$mutation.TaskRevision;SideEffectsPerformed=$true}
 }
 function New-MayaQaHandoff {
     param(
