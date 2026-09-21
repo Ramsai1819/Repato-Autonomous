@@ -52,10 +52,10 @@ function Assert-TaraRevitExecutableVersion([string]$Path){
 function New-TaraRevitQaPlan {
     param([string]$StoreRoot,[string]$TaskId,[string]$WorkflowId,[string]$QaWorkflowId,[string]$RunId,[string]$ModelPath,[string]$SidecarPath,[string]$ReportDirectory,[string]$RevitInstallDir,[string]$QaAddinRoot,[ValidateRange(1,3600)][int]$TimeoutSeconds=900,[switch]$DryRun,[Parameter(Mandatory)]$Context)
     $runners=@{
-        'create-levels'=@('Repato.CreateLevels.TestRunner.addin','REPATO_QA_LEVELS_REQUEST','Invoke-CreateLevelsQA.ps1')
-        'grid-bubble-visibility-v1'=@('Repato.GridBubbleVisibility.TestRunner.addin','REPATO_QA_GRID_BUBBLE_REQUEST','Invoke-GridBubbleVisibilityQA.ps1')
-        'grid-bubble-offset-v1'=@('Repato.GridBubbleOffset.TestRunner.addin','REPATO_QA_GRID_BUBBLE_OFFSET_REQUEST','Invoke-GridBubbleOffsetQA.ps1')
-        'grid-resequence-v1'=@('Repato.GridResequence.TestRunner.addin','REPATO_QA_GRID_RESEQUENCE_REQUEST','Invoke-GridResequenceQA.ps1')
+        'create-levels'=@('Repato.CreateLevels.TestRunner.addin','REPATO_QA_LEVELS_REQUEST','Invoke-CreateLevelsQA.ps1','Repato.Revit.TestRunner.CreateLevelsQaApplication')
+        'grid-bubble-visibility-v1'=@('Repato.GridBubbleVisibility.TestRunner.addin','REPATO_QA_GRID_BUBBLE_REQUEST','Invoke-GridBubbleVisibilityQA.ps1','Repato.Revit.TestRunner.GridBubbleQaApplication')
+        'grid-bubble-offset-v1'=@('Repato.GridBubbleOffset.TestRunner.addin','REPATO_QA_GRID_BUBBLE_OFFSET_REQUEST','Invoke-GridBubbleOffsetQA.ps1','Repato.Revit.TestRunner.GridBubbleOffsetQaApplication')
+        'grid-resequence-v1'=@('Repato.GridResequence.TestRunner.addin','REPATO_QA_GRID_RESEQUENCE_REQUEST','Invoke-GridResequenceQA.ps1','Repato.Revit.TestRunner.GridResequenceQaApplication')
     }
     if(!$runners.ContainsKey($QaWorkflowId)){throw 'Workflow has no supported unattended startup runner (Welcome requires supervision; Create Grids has no startup application).'}
     foreach($name in @('TaskId','WorkflowId','QaWorkflowId','RunId')){ $value=Get-Variable $name -ValueOnly;if($value -notmatch '^[A-Za-z0-9][A-Za-z0-9_-]{0,127}$' -or $Context.$name -cne $value){throw "Wrong workflow identity: $name"} }
@@ -77,11 +77,16 @@ function New-TaraRevitQaPlan {
     $runner=$runners[$QaWorkflowId]
     $manifest=Assert-TaraPath (Join-Path $roots.UserAddinsRoot $runner[0]) $roots.UserAddinsRoot -Leaf
     $dll=Assert-TaraPath (Join-Path $addin 'Repato.Revit.dll') $addin -Leaf
-    $sourceManifest=Assert-TaraPath $Context.ManifestPath -Leaf
-    if([IO.Path]::GetFileName($sourceManifest) -cne $runner[0]){throw 'Manifest does not match the selected startup runner.'}
-    foreach($pair in @(@($dll,$Context.ArtifactSha256),@($Context.ArtifactPath,$Context.ArtifactSha256),@($manifest,$Context.ManifestSha256),@($sourceManifest,$Context.ManifestSha256))){$null=Assert-TaraPath $pair[0] -Leaf;if($pair[1] -notmatch '^[a-fA-F0-9]{64}$' -or (Get-TaraSha256 $pair[0]) -ine $pair[1]){throw 'Artifact/manifest hash mismatch.'}}
+    $artifactManifest=Assert-TaraPath $Context.ManifestPath -Leaf
+    $qaRunnerSourceManifest=Assert-TaraPath (Join-Path $qa $runner[0]) $qa -Leaf
+    $artifactPairs=@(@($dll,$Context.ArtifactSha256),@($Context.ArtifactPath,$Context.ArtifactSha256),@($artifactManifest,$Context.ManifestSha256))
+    foreach($pair in $artifactPairs){$null=Assert-TaraPath $pair[0] -Leaf;if($pair[1] -notmatch '^[a-fA-F0-9]{64}$' -or (Get-TaraSha256 $pair[0]) -ine $pair[1]){throw 'Artifact or artifact-manifest hash mismatch.'}}
+    $qaRunnerManifestSha256=Get-TaraSha256 $qaRunnerSourceManifest
+    if((Get-TaraSha256 $manifest) -ine $qaRunnerManifestSha256){throw 'QA runner manifest hash mismatch.'}
     $xml=[xml](Get-Content -LiteralPath $manifest -Raw)
     if(@($xml.RevitAddIns.AddIn|Where-Object Type -eq 'Application').Count -ne 1){throw 'QA startup application manifest is required.'}
+    $appEntries=@($xml.RevitAddIns.AddIn|Where-Object Type -eq 'Application')
+    if($appEntries.Count -ne 1 -or $appEntries[0].FullClassName -cne $runner[3]){throw 'QA runner startup class does not match the selected workflow.'}
     foreach($entry in $xml.RevitAddIns.AddIn){if([IO.Path]::GetFullPath((Join-Path $roots.UserAddinsRoot ([string]$entry.Assembly))) -ine $dll){throw 'Manifest assembly path is outside the QA deployment.'}}
     $inventory=Get-AddinIsolationInventory -PolicyPath (Join-Path $qa 'MachineWideAddins.allowlist.json') -MachineRoot $roots.MachineRoot -UserRoot $roots.UserAddinsRoot -QaSourceRoot $qa
     if(!$inventory.Allowed -or @($inventory.Errors).Count){throw ('Add-in allowlist rejected: '+(@($inventory.Errors)+@($inventory.DetectedAddins|Where-Object {!$_.Allowlisted}|ForEach-Object Reason)-join '; '))}
@@ -90,7 +95,7 @@ function New-TaraRevitQaPlan {
     $verifier=Assert-TaraPath (Join-Path $qa $runner[2]) $qa -Leaf
     if(!$DryRun){Assert-TaraInteractiveSession}
     $requestId=[guid]::NewGuid().ToString('N');$requestPath=Join-Path ([IO.Path]::GetDirectoryName($model)) ('tara-'+$requestId+'.request.json')
-    [pscustomobject]@{StoreRoot=$StoreRoot;TaskId=$TaskId;WorkflowId=$WorkflowId;QaWorkflowId=$QaWorkflowId;RunId=$RunId;Context=$Context;ModelPath=$model;SidecarPath=$sidecar;SidecarSha256=(Get-TaraSha256 $sidecar);ReportDirectory=$reportRoot;RevitInstallDir=$RevitInstallDir;QaAddinRoot=$addin;TimeoutSeconds=$TimeoutSeconds;Executable=$exe;ExecutableSha256=(Get-TaraSha256 $exe);Command=('"'+$exe+'"');Arguments='';EnvironmentVariable=$runner[1];VerifierPath=$verifier;VerifierSha256=(Get-TaraSha256 $verifier);RequestId=$requestId;RequestPath=$requestPath;ResultPath=($requestPath+'.result.json');EvidencePath=(Join-Path $reportRoot ('tara-'+$requestId+'.json'));InstalledDll=$dll;InstalledManifest=$manifest;Isolation=$inventory;SideEffectsPerformed=$false}
+    [pscustomobject]@{StoreRoot=$StoreRoot;TaskId=$TaskId;WorkflowId=$WorkflowId;QaWorkflowId=$QaWorkflowId;RunId=$RunId;Context=$Context;ModelPath=$model;SidecarPath=$sidecar;SidecarSha256=(Get-TaraSha256 $sidecar);ReportDirectory=$reportRoot;RevitInstallDir=$RevitInstallDir;QaAddinRoot=$addin;TimeoutSeconds=$TimeoutSeconds;Executable=$exe;ExecutableSha256=(Get-TaraSha256 $exe);Command=('"'+$exe+'"');Arguments='';EnvironmentVariable=$runner[1];VerifierPath=$verifier;VerifierSha256=(Get-TaraSha256 $verifier);RequestId=$requestId;RequestPath=$requestPath;ResultPath=($requestPath+'.result.json');EvidencePath=(Join-Path $reportRoot ('tara-'+$requestId+'.json'));InstalledDll=$dll;ArtifactManifestPath=$artifactManifest;ArtifactManifestSha256=$Context.ManifestSha256;QaRunnerManifestPath=$manifest;QaRunnerManifestSha256=$qaRunnerManifestSha256;InstalledManifest=$manifest;Isolation=$inventory;SideEffectsPerformed=$false}
 }
 function Write-TaraJsonNew($Path,$Value){
     $bytes=[Text.UTF8Encoding]::new($false).GetBytes(($Value|ConvertTo-Json -Depth 30));$stream=[IO.FileStream]::new($Path,[IO.FileMode]::CreateNew,[IO.FileAccess]::Write,[IO.FileShare]::None)
@@ -128,7 +133,7 @@ function Assert-TaraResult($Plan){
     if($report.TestId -cne $Plan.Context.TestId -or $report.DocumentPath -ine $Plan.ModelPath -or $report.FixtureId -cne $Plan.Context.FixtureId -or $report.FixtureSha256 -ine $Plan.Context.FixtureSha256 -or $report.AssemblyIdentity.Sha256 -ine $Plan.Context.ArtifactSha256){throw 'Report model, fixture, artifact or test identity mismatch.'}
     if([DateTimeOffset]::Parse($report.StartedUtc) -lt [DateTimeOffset]::Parse($request.createdUtc) -or [DateTimeOffset]::Parse($report.FinishedUtc) -lt [DateTimeOffset]::Parse($report.StartedUtc) -or [DateTimeOffset]::Parse($report.FinishedUtc) -gt [DateTimeOffset]::UtcNow.AddSeconds(5)){throw 'Report is stale or has invalid timestamps.'}
     if([DateTimeOffset]::Parse($report.FinishedUtc) -gt [DateTimeOffset]::Parse($request.expiresUtc)){throw 'Report completed after request expiry.'}
-    foreach($pair in @(@($Plan.ModelPath,$Plan.Context.FixtureSha256),@($Plan.Context.SourceFixturePath,$Plan.Context.FixtureSha256),@($Plan.SidecarPath,$Plan.SidecarSha256),@($Plan.InstalledDll,$Plan.Context.ArtifactSha256),@($Plan.InstalledManifest,$Plan.Context.ManifestSha256),@($Plan.Context.ManifestPath,$Plan.Context.ManifestSha256),@($Plan.Context.ArtifactPath,$Plan.Context.ArtifactSha256))){if((Get-TaraSha256 $pair[0]) -ine $pair[1]){throw 'Post-run evidence hash mismatch.'}}
+    foreach($pair in @(@($Plan.ModelPath,$Plan.Context.FixtureSha256),@($Plan.Context.SourceFixturePath,$Plan.Context.FixtureSha256),@($Plan.SidecarPath,$Plan.SidecarSha256),@($Plan.InstalledDll,$Plan.Context.ArtifactSha256),@($Plan.InstalledManifest,$Plan.QaRunnerManifestSha256),@($Plan.Context.ManifestPath,$Plan.Context.ManifestSha256),@($Plan.Context.ArtifactPath,$Plan.Context.ArtifactSha256))){if((Get-TaraSha256 $pair[0]) -ine $pair[1]){throw 'Post-run evidence hash mismatch.'}}
     $repoRoot=[IO.Path]::GetDirectoryName($Plan.Context.QaRoot)
     Assert-ReportedAddinIsolation $Plan.Isolation $report.AddinIsolation
     # Existing runner verifier supplies workflow-specific assertions and input checks.
@@ -143,14 +148,14 @@ function Invoke-TaraRevitQa {
         return [pscustomobject]@{
             Success=$true;Status='DryRun';Mode='DryRun';Error=$null
             Command=$Plan.Command;RequestPath=$Plan.RequestPath;ResultPath=$Plan.ResultPath
-            ExecutablePath=$Plan.Executable;ModelPath=$Plan.ModelPath;QaAddinRoot=$Plan.QaAddinRoot
+            ExecutablePath=$Plan.Executable;ModelPath=$Plan.ModelPath;QaAddinRoot=$Plan.QaAddinRoot;ArtifactManifestPath=$Plan.ArtifactManifestPath;ArtifactManifestSha256=$Plan.ArtifactManifestSha256;QaRunnerManifestPath=$Plan.QaRunnerManifestPath;QaRunnerManifestSha256=$Plan.QaRunnerManifestSha256
             EnvironmentVariable=$Plan.EnvironmentVariable;EnvironmentValue=$Plan.RequestPath
             ValidationResults=[pscustomobject]@{FixtureId=$Plan.Context.FixtureId;FixtureSha256=$Plan.Context.FixtureSha256;ArtifactSha256=$Plan.Context.ArtifactSha256;ManifestSha256=$Plan.Context.ManifestSha256;PolicySha256=$Plan.Isolation.PolicySha256;Validated=$true}
             SideEffectsPerformed=$false;ProcessStarted=$false;ProcessId=$null;ExitCode=$null
         }
     }
     Assert-TaraInteractiveSession
-    $result=[ordered]@{Success=$false;Mode='Real';Status='Failed';TaskId=$Plan.TaskId;WorkflowId=$Plan.WorkflowId;QaWorkflowId=$Plan.QaWorkflowId;RunId=$Plan.RunId;RequestId=$Plan.RequestId;RequestPath=$Plan.RequestPath;ResultPath=$Plan.ResultPath;EvidencePath=$Plan.EvidencePath;ReportPath=$null;ReportSha256=$null;NativeRunId=$null;ResultSha256=$null;RequestSha256=$null;ModelPath=$Plan.ModelPath;SidecarPath=$Plan.SidecarPath;SidecarSha256=$Plan.SidecarSha256;FixtureId=$Plan.Context.FixtureId;FixtureSha256=$Plan.Context.FixtureSha256;ArtifactPath=$Plan.InstalledDll;ArtifactSha256=$Plan.Context.ArtifactSha256;ManifestPath=$Plan.InstalledManifest;ManifestSha256=$Plan.Context.ManifestSha256;ExecutableSha256=$Plan.ExecutableSha256;PolicySha256=$Plan.Isolation.PolicySha256;Command=$Plan.Command;EnvironmentVariable=$Plan.EnvironmentVariable;EnvironmentValue=$Plan.RequestPath;ModelSha256=$Plan.Context.FixtureSha256;ProcessStarted=$false;ProcessId=$null;ProcessStartUtc=$null;ProcessEndUtc=$null;StartedUtc=[DateTimeOffset]::UtcNow.ToString('O');FinishedUtc=$null;ExitState='NotStarted';ExitCode=$null;FailureReason=$null;Error=$null;SideEffectsPerformed=$false}
+    $result=[ordered]@{Success=$false;Mode='Real';Status='Failed';TaskId=$Plan.TaskId;WorkflowId=$Plan.WorkflowId;QaWorkflowId=$Plan.QaWorkflowId;RunId=$Plan.RunId;RequestId=$Plan.RequestId;RequestPath=$Plan.RequestPath;ResultPath=$Plan.ResultPath;EvidencePath=$Plan.EvidencePath;ReportPath=$null;ReportSha256=$null;NativeRunId=$null;ResultSha256=$null;RequestSha256=$null;ModelPath=$Plan.ModelPath;SidecarPath=$Plan.SidecarPath;SidecarSha256=$Plan.SidecarSha256;FixtureId=$Plan.Context.FixtureId;FixtureSha256=$Plan.Context.FixtureSha256;ArtifactPath=$Plan.InstalledDll;ArtifactSha256=$Plan.Context.ArtifactSha256;ArtifactManifestPath=$Plan.ArtifactManifestPath;ArtifactManifestSha256=$Plan.ArtifactManifestSha256;QaRunnerManifestPath=$Plan.QaRunnerManifestPath;QaRunnerManifestSha256=$Plan.QaRunnerManifestSha256;ManifestPath=$Plan.InstalledManifest;ManifestSha256=$Plan.QaRunnerManifestSha256;ExecutableSha256=$Plan.ExecutableSha256;PolicySha256=$Plan.Isolation.PolicySha256;Command=$Plan.Command;EnvironmentVariable=$Plan.EnvironmentVariable;EnvironmentValue=$Plan.RequestPath;ModelSha256=$Plan.Context.FixtureSha256;ProcessStarted=$false;ProcessId=$null;ProcessStartUtc=$null;ProcessEndUtc=$null;StartedUtc=[DateTimeOffset]::UtcNow.ToString('O');FinishedUtc=$null;ExitState='NotStarted';ExitCode=$null;FailureReason=$null;Error=$null;SideEffectsPerformed=$false}
     $process=$null
     try{
         # Revalidate the filesystem immediately before writing/launching; a dry plan is not authorization.

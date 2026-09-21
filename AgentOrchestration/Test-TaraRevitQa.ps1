@@ -39,6 +39,7 @@ try {
     $model = Join-Path $runRoot 'model.rvt'
     $sidecar = $model + '.fixture.json'
     $manifest = Join-Path $qa 'Repato.CreateLevels.TestRunner.addin'
+    $artifactManifest = Join-Path $qa 'manifest.addin'
     $installedManifest = Join-Path $userRoot 'Repato.CreateLevels.TestRunner.addin'
     $dll = Join-Path $addinRoot 'Repato.Revit.dll'
     Set-Content -LiteralPath $source -Value 'synthetic disposable fixture; not a Revit model'
@@ -46,6 +47,7 @@ try {
     Set-Content -LiteralPath $dll -Value 'synthetic DLL; never loaded'
     Set-Content -LiteralPath (Join-Path $revitRoot 'Revit.exe') 'synthetic executable; never launched'
     Copy-Item -LiteralPath (Join-Path $PSScriptRoot '..\QA\Repato.CreateLevels.TestRunner.addin') -Destination $manifest
+    Set-Content -LiteralPath $artifactManifest -Value 'Neil artifact manifest evidence; intentionally distinct from runner manifest'
     Copy-Item -LiteralPath $manifest -Destination $installedManifest
     $hash = (Get-FileHash -LiteralPath $source -Algorithm SHA256).Hash
     Write-TestJson $sidecar @{fixtureId='CreateLevelsEmpty';sourceSha256=$hash}
@@ -56,7 +58,7 @@ try {
     & $module { param($roots) $script:testRoots=$roots; function script:Get-TaraRuntimeRoots { $script:testRoots }; function script:Assert-TaraInteractiveSession {}; function script:Assert-TaraRevitExecutableVersion {param($Path)} } $roots
     $context = [pscustomobject]@{QaRoot=$qa;SourceFixturePath=$source;FixtureId='CreateLevelsEmpty';FixtureSha256=$hash;
         TestId='create-levels-elevations-v1';ArtifactPath=$dll;ArtifactSha256=(Get-FileHash $dll).Hash;
-        ManifestPath=$manifest;ManifestSha256=(Get-FileHash $manifest).Hash;TaskId='task-test';WorkflowId='workflow-test';QaWorkflowId='create-levels';RunId='run-test'}
+        ManifestPath=$artifactManifest;ManifestSha256=(Get-FileHash $artifactManifest).Hash;TaskId='task-test';WorkflowId='workflow-test';QaWorkflowId='create-levels';RunId='run-test'}
     $parameters = @{StoreRoot=(Join-Path $testRoot 'store');TaskId='task-test';WorkflowId='workflow-test';QaWorkflowId='create-levels';RunId='run-test';
         ModelPath=$model;SidecarPath=$sidecar;ReportDirectory=$reports;RevitInstallDir=$revitRoot;QaAddinRoot=$addinRoot;TimeoutSeconds=1;Context=$context}
     & $module { function script:Start-TaraProcess { throw 'Regression attempted to start a real process.' } }
@@ -66,6 +68,9 @@ try {
     Assert-Test (!$dry.SideEffectsPerformed -and $null -eq $dry.ProcessId) 'Dry-run process/side-effect contract failed.'
     Assert-Test ((Get-TestSnapshot) -ceq $before) 'Dry-run wrote or changed a file.'
     Assert-Test ($dry.Command -ceq ('"'+(Join-Path $revitRoot 'Revit.exe')+'"')) 'Dry-run command mismatch.'
+    Assert-Test ([IO.Path]::GetFileName($plan.ArtifactManifestPath) -ceq 'manifest.addin' -and [IO.Path]::GetFileName($plan.QaRunnerManifestPath) -ceq 'Repato.CreateLevels.TestRunner.addin') 'Two-manifest selection was not preserved.'
+    $bad=$parameters.Clone();$bad.QaWorkflowId='grid-bubble-visibility-v1'
+    Assert-Rejected { New-TaraRevitQaPlan @bad -DryRun } 'Wrong workflow identity|Required file missing|startup class|fixture' 'Mismatched workflow runner'
     foreach ($case in @(@('ModelPath','missing.rvt','Required file missing','Missing fixture'),@('SidecarPath','missing.fixture.json','Required file missing','Missing sidecar'))) {
         $bad=$parameters.Clone();$bad[$case[0]]=Join-Path $runRoot $case[1]
         Assert-Rejected { New-TaraRevitQaPlan @bad -DryRun } $case[2] $case[3]
@@ -82,6 +87,12 @@ try {
     $originalDll=[IO.File]::ReadAllBytes($dll);Add-Content -LiteralPath $dll 'tampered'
     Assert-Rejected { New-TaraRevitQaPlan @parameters -DryRun } 'hash mismatch' 'DLL hash mismatch'
     [IO.File]::WriteAllBytes($dll,$originalDll)
+    $originalArtifactManifest=[IO.File]::ReadAllBytes($artifactManifest);Add-Content -LiteralPath $artifactManifest 'tampered'
+    Assert-Rejected { New-TaraRevitQaPlan @parameters -DryRun } 'artifact-manifest hash mismatch' 'Artifact manifest hash mismatch'
+    [IO.File]::WriteAllBytes($artifactManifest,$originalArtifactManifest)
+    $originalRunnerManifest=[IO.File]::ReadAllBytes($installedManifest);Add-Content -LiteralPath $installedManifest 'tampered'
+    Assert-Rejected { New-TaraRevitQaPlan @parameters -DryRun } 'QA runner manifest hash mismatch' 'QA runner manifest hash mismatch'
+    [IO.File]::WriteAllBytes($installedManifest,$originalRunnerManifest)
     Write-TestJson $policy @{schemaVersion=1;machineWideRoot=$machineRoot;approvedMachineWideManifests=@(@{path=(Join-Path $machineRoot 'bad.addin');sha256='bad';reviewReason='invalid'})}
     Assert-Rejected { New-TaraRevitQaPlan @parameters -DryRun } 'allowlist rejected' 'Invalid allowlist entry'
     Write-TestJson $policy @{schemaVersion=1;machineWideRoot=$machineRoot;approvedMachineWideManifests=@()}
