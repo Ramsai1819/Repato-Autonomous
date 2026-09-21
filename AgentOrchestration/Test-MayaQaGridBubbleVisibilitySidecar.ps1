@@ -3,6 +3,8 @@ Import-Module (Join-Path $PSScriptRoot 'Repato.AgentOrchestration.psm1') -Force
 Import-Module (Join-Path $PSScriptRoot 'Repato.Deployment.v4.psm1') -Force
 Import-Module (Join-Path $PSScriptRoot 'Repato.MayaQaWorkflow.psm1') -Force
 $store=Join-Path ([IO.Path]::GetTempPath()) ('maya-grid-sidecar-'+[guid]::NewGuid().ToString('N'));$b=New-MayaQaBootstrap grid-bubble-visibility-v1 run-grid-sidecar $store
+$null=New-MayaQaBuildRequest $b.StoreRoot $b.TaskId $b.WorkflowId grid-bubble-visibility-v1 grid-bubble-visibility-v1
+$build=Invoke-MayaQaBuildExecute $b.StoreRoot $b.TaskId $b.WorkflowId grid-bubble-visibility-v1
 $run=New-MayaQaRun $b.StoreRoot $b.TaskId $b.WorkflowId grid-bubble-visibility-v1 run-grid-sidecar
 if($run.ModelPath -notlike 'C:\Repato-Autonomous\Source\QA\TestRuns\*'){throw 'Coordinator did not use canonical Source QA TestRuns.'}
 $side=Get-Content -LiteralPath $run.SidecarPath -Raw|ConvertFrom-Json

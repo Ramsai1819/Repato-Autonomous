@@ -179,13 +179,22 @@ function Invoke-MayaQaBuildExecute {
     $workflow = Get-DeployWorkflow $StoreRoot $TaskId $WorkflowId
     if ($workflow.PSObject.Properties.Name -notcontains 'qaBuildRequest' -or !$workflow.qaBuildRequest) { throw 'Persisted Neil build request is missing.' }
     if ($workflow.PSObject.Properties.Name -contains 'qaWorkflowId' -and $workflow.qaWorkflowId -cne $QaWorkflowId) { throw 'QA workflow identity mismatch.' }
-    if ($workflow.qaBuildRequest.SourceBranch -cne $SourceBranch -or $workflow.qaBuildRequest.ProjectPath -cne $ProjectPath) { throw 'Build request parameters do not match the persisted request.' }
+    $normalize = {
+        param([string]$Value,[string]$Base)
+        if([string]::IsNullOrWhiteSpace($Value)){throw 'Persisted build path is empty.'}
+        $clean=$Value.Trim().Trim('"') -replace '\\\\','\'
+        if([IO.Path]::IsPathRooted($clean)){[IO.Path]::GetFullPath($clean)}else{[IO.Path]::GetFullPath((Join-Path $Base $clean))}
+    }
     $root = [IO.Path]::GetFullPath((Join-Path $PSScriptRoot '..'))
+    $persistedProject = & $normalize ([string]$workflow.qaBuildRequest.ProjectPath) $root
+    $requestedProjectInput = & $normalize $ProjectPath $root
+    if ($workflow.qaBuildRequest.SourceBranch -cne $SourceBranch -or $persistedProject -ine $requestedProjectInput) { throw 'Build request parameters do not match the persisted request.' }
     $project = [IO.Path]::GetFullPath((Join-Path $root 'Forma.RevitConnector.csproj'))
-    $requestedProject = [IO.Path]::GetFullPath((Join-Path $root $workflow.qaBuildRequest.ProjectPath))
-    if ($requestedProject -ine $project) { throw 'Project path is outside approved workspace.' }
+    if ($persistedProject -ine $project -or !(Test-Path -LiteralPath $persistedProject -PathType Leaf)) { throw 'Normalized project path is missing or outside the approved workspace.' }
     $artifact = [IO.Path]::GetFullPath((Join-Path $root 'bin\Release\net8.0-windows\Repato.Revit.dll'))
     $artifactManifest = [IO.Path]::GetFullPath((Join-Path $root 'Repato.addin'))
+    $requestedArtifact = if($workflow.qaBuildRequest.PSObject.Properties.Name -contains 'RequestedArtifact') { & $normalize ([string]$workflow.qaBuildRequest.RequestedArtifact) $root } else { $artifact }
+    if($requestedArtifact -ine $artifact){throw 'Normalized requested artifact is outside the approved Release artifact path.'}
     $command = 'dotnet build "' + $project + '" -c Release -p:RevitInstallDir="E:\revit\Revit 2025"'
     if ($DryRun) { return [pscustomobject]@{BuildRequestId=$workflow.qaBuildRequest.BuildRequestId;BuildStatus='planned';Command=$command;Configuration='Release';ArtifactPath=$artifact;SideEffectsPerformed=$false} }
     $started = (Get-Date).ToUniversalTime().ToString('O')
