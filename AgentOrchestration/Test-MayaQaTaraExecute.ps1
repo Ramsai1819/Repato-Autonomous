@@ -3,8 +3,9 @@ Set-StrictMode -Version Latest
 # Coordinator contract tests use an in-memory store and inert bridge. No Revit or deployment.
 $root=Join-Path ([IO.Path]::GetTempPath()) ('maya-tara-regression-'+[guid]::NewGuid().ToString('N'))
 New-Item -ItemType Directory -Path $root | Out-Null
-$artifact=Join-Path $root 'synthetic.dll';$manifest=Join-Path $root 'synthetic.addin'
-Set-Content -LiteralPath $artifact 'synthetic artifact';Set-Content -LiteralPath $manifest 'synthetic manifest'
+$artifact=Join-Path $root 'Repato.Revit.dll';$manifest=Join-Path $root 'synthetic.addin'
+Set-Content -LiteralPath $artifact ('realistic synthetic DLL artifact ' + ('x' * 1100));Set-Content -LiteralPath $manifest '<RevitAddIns><AddIn Type="Application"><Assembly>Repato.Revit.dll</Assembly></AddIn></RevitAddIns>'
+$originalArtifact=[IO.File]::ReadAllBytes($artifact)
 $model=Join-Path $root 'model.rvt';$sidecar=$model+'.fixture.json'
 $build=[pscustomobject]@{BuildStatus='succeeded';BuildRequestId='build-test';ArtifactPath=$artifact;ArtifactSha256=(Get-FileHash $artifact).Hash;ManifestPath=$manifest;ManifestSha256=(Get-FileHash $manifest).Hash}
 $handoff=[pscustomobject]@{HandoffId='handoff-test';HandoffStatus='ready';TaskId='task-test';QaWorkflowId='create-levels';BuildRequestId='build-test';FixtureId='CreateLevelsEmpty';NativeTestId='create-levels-elevations-v1';ModelPath=$model;SidecarPath=$sidecar;ArtifactPath=$artifact;ArtifactSha256=$build.ArtifactSha256;ManifestPath=$manifest;ManifestSha256=$build.ManifestSha256}
@@ -70,7 +71,12 @@ try {
     Assert-Rejected {Invoke-MayaQaTaraExecute @bad -DryRun} 'run plan identity mismatch'
     Add-Content -LiteralPath $artifact 'changed'
     Assert-Rejected {Invoke-MayaQaTaraExecute @parameters -DryRun} 'hash mismatch'
-    Set-Content -LiteralPath $artifact 'synthetic artifact'
+    [IO.File]::WriteAllBytes($artifact,$originalArtifact)
+    $placeholder=Join-Path $root 'artifact.bin';Set-Content -LiteralPath $placeholder '18-byte placeholder'
+    $savedArtifactPath=$build.ArtifactPath;$savedArtifactHash=$build.ArtifactSha256;$savedHandoffPath=$handoff.ArtifactPath;$savedHandoffHash=$handoff.ArtifactSha256
+    $build.ArtifactPath=$placeholder;$build.ArtifactSha256=(Get-FileHash $placeholder).Hash;$handoff.ArtifactPath=$placeholder;$handoff.ArtifactSha256=$build.ArtifactSha256
+    Assert-Rejected {Invoke-MayaQaTaraExecute @parameters -IntegrationTest} 'real Release DLL artifact'
+    $build.ArtifactPath=$savedArtifactPath;$build.ArtifactSha256=$savedArtifactHash;$handoff.ArtifactPath=$savedHandoffPath;$handoff.ArtifactSha256=$savedHandoffHash
     $result=Invoke-MayaQaTaraExecute @parameters -IntegrationTest
     Assert-Test ($result.Status -ceq 'Passed' -and $workflow.qaTaraExecutionStatus -ceq 'Passed' -and $workflow.qaTaraExecutionEvidence.RequestId -ceq 'request-test') 'Successful execution evidence not persisted'
     Assert-Rejected {Invoke-MayaQaTaraExecute @parameters -IntegrationTest} 'Duplicate Tara execution'
