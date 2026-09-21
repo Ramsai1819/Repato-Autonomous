@@ -1,6 +1,7 @@
 param(
     [Parameter(Mandatory)]
     [ValidateSet(
+        'qa-tara-execute',
         'qa-handoff',
         'qa-report-submit',
         'qa-build-execute',
@@ -40,6 +41,14 @@ param(
     [string]$UserRequest,
     [string]$SourceBranch,
     [string]$ProjectPath,
+    [string]$ModelPath,
+    [string]$SidecarPath,
+    [string]$ReportDirectory,
+    [string]$RevitInstallDir = 'E:\revit\Revit 2025',
+    [string]$QaAddinRoot,
+    [ValidateRange(1,3600)][int]$TimeoutSeconds = 900,
+    [switch]$LocalRun,
+    [switch]$IntegrationTest,
     [switch]$DryRun
 )
 
@@ -52,6 +61,12 @@ Import-Module (Join-Path $PSScriptRoot 'Repato.MayaQaWorkflow.psm1') -Force -War
 
 try {
     $result = switch ($Operation) {
+        'qa-tara-execute' {
+            Invoke-MayaQaTaraExecute -StoreRoot $StoreRoot -TaskId $TaskId -WorkflowId $WorkflowId `
+                -QaWorkflowId $QaWorkflowId -RunId $RunId -ModelPath $ModelPath -SidecarPath $SidecarPath `
+                -ReportDirectory $ReportDirectory -RevitInstallDir $RevitInstallDir -QaAddinRoot $QaAddinRoot `
+                -TimeoutSeconds $TimeoutSeconds -DryRun:$DryRun -LocalRun:$LocalRun -IntegrationTest:$IntegrationTest
+        }
         'qa-intake' {
             Invoke-MayaQaIntake `
                 $TaskId `
@@ -196,6 +211,7 @@ try {
         'qa-help' {
             [pscustomobject]@{
                 Operations = @(
+                    'qa-tara-execute',
                     'qa-handoff',
                     'qa-report-submit',
                     'qa-build-execute',
@@ -231,6 +247,13 @@ try {
         }
     }
 
+    if ($Operation -eq 'qa-tara-execute' -and $LocalRun -and !$DryRun) {
+        'STARTED'
+        'REQUEST_CREATED'
+        if ($result.ReportPath) { 'REPORT_FOUND' }
+        if ($result.Status -ceq 'Passed') { 'PASSED' } else { 'FAILED' }
+        'FINAL_RESULT'
+    }
     $result | ConvertTo-Json -Compress -Depth 12
 }
 catch {
