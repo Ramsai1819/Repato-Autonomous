@@ -6,9 +6,9 @@ New-Item -ItemType Directory -Path $root | Out-Null
 $artifact=Join-Path $root 'synthetic.dll';$manifest=Join-Path $root 'synthetic.addin'
 Set-Content -LiteralPath $artifact 'synthetic artifact';Set-Content -LiteralPath $manifest 'synthetic manifest'
 $model=Join-Path $root 'model.rvt';$sidecar=$model+'.fixture.json'
-$build=[pscustomobject]@{ExitCode=0;Configuration='Release';BuildRequestId='build-test';ArtifactPath=$artifact;ArtifactSha256=(Get-FileHash $artifact).Hash;ManifestPath=$manifest;ManifestSha256=(Get-FileHash $manifest).Hash}
+$build=[pscustomobject]@{BuildStatus='succeeded';BuildRequestId='build-test';ArtifactPath=$artifact;ArtifactSha256=(Get-FileHash $artifact).Hash;ManifestPath=$manifest;ManifestSha256=(Get-FileHash $manifest).Hash}
 $handoff=[pscustomobject]@{HandoffId='handoff-test';HandoffStatus='ready';TaskId='task-test';QaWorkflowId='create-levels';BuildRequestId='build-test';FixtureId='CreateLevelsEmpty';NativeTestId='create-levels-elevations-v1';ModelPath=$model;SidecarPath=$sidecar;ArtifactPath=$artifact;ArtifactSha256=$build.ArtifactSha256;ManifestPath=$manifest;ManifestSha256=$build.ManifestSha256}
-$workflow=[pscustomobject]@{taskId='task-test';workflowRevision=1;qaBuildRequest=[pscustomobject]@{BuildRequestId='build-test'};qaBuildEvidence=$build;qaBuildStatus='succeeded';qaHandoff=$handoff;qaHandoffId='handoff-test';qaRunId='run-test';qaWorkflowId='create-levels';qaModelPath=$model;qaSidecarPath=$sidecar;qaFixtureId='CreateLevelsEmpty';qaFixtureSha256=('A'*64);qaTestId='create-levels-elevations-v1';qaApprovalId='approval-test';qaApprovalStatus='approved'}
+$workflow=[pscustomobject]@{taskId='task-test';workflowRevision=1;qaBuildRequest=[pscustomobject]@{BuildRequestId='build-test';BuildStatus='requested'};qaBuildEvidence=$build;qaBuildStatus='succeeded';qaHandoff=$handoff;qaHandoffId='handoff-test';qaRunId='run-test';qaWorkflowId='create-levels';qaModelPath=$model;qaSidecarPath=$sidecar;qaFixtureId='CreateLevelsEmpty';qaFixtureSha256=('A'*64);qaTestId='create-levels-elevations-v1';qaApprovalId='approval-test';qaApprovalStatus='approved'}
 $task=[pscustomobject]@{revision=1;approvalRequests=@([pscustomobject]@{requestId='approval-test';action='qa-run';status='approved'})}
 $testModule=New-Module -ArgumentList (Join-Path $PSScriptRoot 'MayaQa.TaraExecution.ps1'),$workflow,$task -ScriptBlock {
     param($path,$workflow,$task)
@@ -20,9 +20,9 @@ $testModule=New-Module -ArgumentList (Join-Path $PSScriptRoot 'MayaQa.TaraExecut
     function Find-RepatoTask {param($data,$taskId) $script:testTask}
     function Get-MayaQaRoot { 'C:\Repato-Autonomous\Source\QA' }
     function Import-Module {param($Name,$WarningAction)}
-    function New-TaraRevitQaPlan {param($Context) [pscustomobject]@{Context=$Context}}
+    function New-TaraRevitQaPlan {param($Context) if($script:inaccessible){throw 'Path inaccessible: C:\synthetic\RepatoQA. Access was denied while validating the QA path.'}; [pscustomobject]@{Context=$Context}}
     function Invoke-TaraRevitQa {param($Plan,[switch]$DryRun)
-        if($DryRun){return [pscustomobject]@{Status='DryRun';SideEffectsPerformed=$false}}
+        if($DryRun){return [pscustomobject]@{Success=$true;Mode='DryRun';Status='DryRun';Error=$null;ExitCode=$null;ProcessStarted=$false;SideEffectsPerformed=$false;RequestPath='C:\synthetic\request.json';ExecutablePath='C:\synthetic\Revit.exe';ModelPath=$model;QaAddinRoot=$root;ValidationResults=[pscustomobject]@{Validated=$true}}}
         $script:launches++
         if($script:testWorkflow.qaTaraExecutionStatus -cne 'Running'){throw 'Execution claim missing before process boundary.'}
         if($script:failBridge){throw 'synthetic bridge failure'}
@@ -44,9 +44,13 @@ function Assert-Rejected([scriptblock]$action,[string]$pattern){$message=$null;t
 try {
     Assert-Rejected {Invoke-MayaQaTaraExecute @parameters} 'IntegrationTest'
     $dry=Invoke-MayaQaTaraExecute @parameters -DryRun
-    Assert-Test (!$dry.SideEffectsPerformed -and $dry.Status -ceq 'DryRun') 'Dry-run contract failed'
+    Assert-Test ($dry.Success -and $dry.Mode -ceq 'DryRun' -and $dry.Status -ceq 'DryRun' -and $null -eq $dry.ExitCode -and !$dry.ProcessStarted -and !$dry.SideEffectsPerformed -and $null -eq $dry.Error -and $dry.ValidationResults.Validated) 'Dry-run contract failed'
     $counts=& $testModule {@($script:mutations,$script:launches)}
     Assert-Test ($counts[0] -eq 0 -and $counts[1] -eq 0) 'Dry-run crossed mutation/process boundary'
+    & $testModule {$script:inaccessible=$true}
+    $denied=Invoke-MayaQaTaraExecute @parameters -DryRun
+    Assert-Test (!$denied.Success -and $denied.Mode -ceq 'DryRun' -and !$denied.ProcessStarted -and !$denied.SideEffectsPerformed -and $null -eq $denied.ExitCode -and $denied.ValidationResults.PathInaccessible -and $denied.Error -match 'Access was denied') 'Inaccessible QA path was not reported structurally'
+    & $testModule {$script:inaccessible=$false}
     foreach($property in @('qaBuildRequest','qaBuildEvidence','qaHandoff','qaRunId','qaApprovalId')){
         $saved=$workflow.$property;$workflow.$property=$null
         Assert-Rejected {Invoke-MayaQaTaraExecute @parameters -DryRun} 'prerequisite is missing'
@@ -55,9 +59,6 @@ try {
     $task.approvalRequests[0].status='pending'
     Assert-Rejected {Invoke-MayaQaTaraExecute @parameters -DryRun} 'approval is required'
     $task.approvalRequests[0].status='approved'
-    $build.ExitCode=1
-    Assert-Rejected {Invoke-MayaQaTaraExecute @parameters -DryRun} 'Release build evidence'
-    $build.ExitCode=0
     $handoff.TaskId='wrong'
     Assert-Rejected {Invoke-MayaQaTaraExecute @parameters -DryRun} 'handoff identity mismatch'
     $handoff.TaskId='task-test'

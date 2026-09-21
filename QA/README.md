@@ -186,3 +186,4 @@ Set-Location 'C:\Repato-Autonomous\Source'
 $receipt = .\QA\Invoke-WelcomeSmokeQA.ps1 -Action Run -TimeoutSeconds 900
 .\QA\Invoke-WelcomeSmokeQA.ps1 -Action Verify -ReceiptPath $receipt
 ```
+Tara dry runs may be performed by `rsgud` only when the approved QA paths are readable. Permission-denied paths are reported as structured validation failures; no permissions are changed. Real Tara execution requires the logged-in, unlocked `RepatoQA` interactive session.

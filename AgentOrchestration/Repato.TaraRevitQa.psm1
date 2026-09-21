@@ -6,8 +6,20 @@ function Assert-TaraPath {
     $full=[IO.Path]::GetFullPath($Path)
     if($Root -and !$full.StartsWith(([IO.Path]::GetFullPath($Root).TrimEnd('\')+'\'),[StringComparison]::OrdinalIgnoreCase)){throw "Path outside approved QA root: $full"}
     if(([IO.DriveInfo]::new([IO.Path]::GetPathRoot($full))).DriveType -ne [IO.DriveType]::Fixed){throw 'A fixed local drive is required.'}
-    for($part=$full;$part;$part=[IO.Path]::GetDirectoryName($part)){if((Test-Path -LiteralPath $part) -and ((Get-Item -LiteralPath $part -Force).Attributes -band [IO.FileAttributes]::ReparsePoint)){throw "Reparse point rejected: $part"}}
-    if($Leaf -and !(Test-Path -LiteralPath $full -PathType Leaf)){throw "Required file missing: $full"}
+    for($part=$full;$part;$part=[IO.Path]::GetDirectoryName($part)){
+        try { $exists=Test-Path -LiteralPath $part -ErrorAction Stop }
+        catch { throw "Path inaccessible: $part. Access was denied while validating the QA path." }
+        if($exists){
+            try { $item=Get-Item -LiteralPath $part -Force -ErrorAction Stop }
+            catch { throw "Path inaccessible: $part. Access was denied while validating the QA path." }
+            if($item.Attributes -band [IO.FileAttributes]::ReparsePoint){throw "Reparse point rejected: $part"}
+        }
+    }
+    if($Leaf){
+        try { $leafExists=Test-Path -LiteralPath $full -PathType Leaf -ErrorAction Stop }
+        catch { throw "Path inaccessible: $full. Access was denied while validating the QA path." }
+        if(!$leafExists){throw "Required file missing: $full"}
+    }
     $full
 }
 function Get-TaraSha256([string]$Path){
@@ -127,9 +139,18 @@ function Assert-TaraResult($Plan){
 }
 function Invoke-TaraRevitQa {
     param([Parameter(Mandatory)]$Plan,[switch]$DryRun)
-    if($DryRun){return [pscustomobject]@{Status='DryRun';Command=$Plan.Command;EnvironmentVariable=$Plan.EnvironmentVariable;EnvironmentValue=$Plan.RequestPath;RequestPath=$Plan.RequestPath;ModelPath=$Plan.ModelPath;SideEffectsPerformed=$false;ProcessId=$null}}
+    if($DryRun){
+        return [pscustomobject]@{
+            Success=$true;Status='DryRun';Mode='DryRun';Error=$null
+            Command=$Plan.Command;RequestPath=$Plan.RequestPath;ResultPath=$Plan.ResultPath
+            ExecutablePath=$Plan.Executable;ModelPath=$Plan.ModelPath;QaAddinRoot=$Plan.QaAddinRoot
+            EnvironmentVariable=$Plan.EnvironmentVariable;EnvironmentValue=$Plan.RequestPath
+            ValidationResults=[pscustomobject]@{FixtureId=$Plan.Context.FixtureId;FixtureSha256=$Plan.Context.FixtureSha256;ArtifactSha256=$Plan.Context.ArtifactSha256;ManifestSha256=$Plan.Context.ManifestSha256;PolicySha256=$Plan.Isolation.PolicySha256;Validated=$true}
+            SideEffectsPerformed=$false;ProcessStarted=$false;ProcessId=$null;ExitCode=$null
+        }
+    }
     Assert-TaraInteractiveSession
-    $result=[ordered]@{Status='Failed';TaskId=$Plan.TaskId;WorkflowId=$Plan.WorkflowId;QaWorkflowId=$Plan.QaWorkflowId;RunId=$Plan.RunId;RequestId=$Plan.RequestId;RequestPath=$Plan.RequestPath;ResultPath=$Plan.ResultPath;EvidencePath=$Plan.EvidencePath;ReportPath=$null;ReportSha256=$null;NativeRunId=$null;ResultSha256=$null;RequestSha256=$null;ModelPath=$Plan.ModelPath;SidecarPath=$Plan.SidecarPath;SidecarSha256=$Plan.SidecarSha256;FixtureId=$Plan.Context.FixtureId;FixtureSha256=$Plan.Context.FixtureSha256;ArtifactPath=$Plan.InstalledDll;ArtifactSha256=$Plan.Context.ArtifactSha256;ManifestPath=$Plan.InstalledManifest;ManifestSha256=$Plan.Context.ManifestSha256;ExecutableSha256=$Plan.ExecutableSha256;PolicySha256=$Plan.Isolation.PolicySha256;Command=$Plan.Command;EnvironmentVariable=$Plan.EnvironmentVariable;EnvironmentValue=$Plan.RequestPath;ModelSha256=$Plan.Context.FixtureSha256;ProcessId=$null;ProcessStartUtc=$null;ProcessEndUtc=$null;StartedUtc=[DateTimeOffset]::UtcNow.ToString('O');FinishedUtc=$null;ExitState='NotStarted';ExitCode=$null;FailureReason=$null;SideEffectsPerformed=$false}
+    $result=[ordered]@{Success=$false;Mode='Real';Status='Failed';TaskId=$Plan.TaskId;WorkflowId=$Plan.WorkflowId;QaWorkflowId=$Plan.QaWorkflowId;RunId=$Plan.RunId;RequestId=$Plan.RequestId;RequestPath=$Plan.RequestPath;ResultPath=$Plan.ResultPath;EvidencePath=$Plan.EvidencePath;ReportPath=$null;ReportSha256=$null;NativeRunId=$null;ResultSha256=$null;RequestSha256=$null;ModelPath=$Plan.ModelPath;SidecarPath=$Plan.SidecarPath;SidecarSha256=$Plan.SidecarSha256;FixtureId=$Plan.Context.FixtureId;FixtureSha256=$Plan.Context.FixtureSha256;ArtifactPath=$Plan.InstalledDll;ArtifactSha256=$Plan.Context.ArtifactSha256;ManifestPath=$Plan.InstalledManifest;ManifestSha256=$Plan.Context.ManifestSha256;ExecutableSha256=$Plan.ExecutableSha256;PolicySha256=$Plan.Isolation.PolicySha256;Command=$Plan.Command;EnvironmentVariable=$Plan.EnvironmentVariable;EnvironmentValue=$Plan.RequestPath;ModelSha256=$Plan.Context.FixtureSha256;ProcessStarted=$false;ProcessId=$null;ProcessStartUtc=$null;ProcessEndUtc=$null;StartedUtc=[DateTimeOffset]::UtcNow.ToString('O');FinishedUtc=$null;ExitState='NotStarted';ExitCode=$null;FailureReason=$null;Error=$null;SideEffectsPerformed=$false}
     $process=$null
     try{
         # Revalidate the filesystem immediately before writing/launching; a dry plan is not authorization.
@@ -137,7 +158,7 @@ function Invoke-TaraRevitQa {
         if($fresh.ExecutableSha256 -ine $Plan.ExecutableSha256 -or $fresh.SidecarSha256 -ine $Plan.SidecarSha256 -or $fresh.Isolation.PolicySha256 -ine $Plan.Isolation.PolicySha256 -or $fresh.VerifierSha256 -ine $Plan.VerifierSha256){throw 'Preflight evidence changed before launch.'}
         $request=[ordered]@{requestId=$Plan.RequestId;testId=$Plan.Context.TestId;modelPath=$Plan.ModelPath;assemblySha256=$Plan.Context.ArtifactSha256;createdUtc=$result.StartedUtc;expiresUtc=[DateTimeOffset]::UtcNow.AddSeconds($Plan.TimeoutSeconds).ToString('O');addinIsolation=$Plan.Isolation;TaskId=$Plan.TaskId;WorkflowId=$Plan.WorkflowId;QaWorkflowId=$Plan.QaWorkflowId;RunId=$Plan.RunId}
         Write-TaraJsonNew $Plan.RequestPath $request;$result.SideEffectsPerformed=$true;$result.RequestSha256=Get-TaraSha256 $Plan.RequestPath
-        $process=Start-TaraProcess $Plan;$result.ProcessId=$process.Id;$result.ProcessStartUtc=$process.StartTime.ToUniversalTime().ToString('O');$result.ExitState='Running'
+        $process=Start-TaraProcess $Plan;$result.ProcessStarted=$true;$result.ProcessId=$process.Id;$result.ProcessStartUtc=$process.StartTime.ToUniversalTime().ToString('O');$result.ExitState='Running'
         Wait-TaraResult $Plan $process
         if((Get-TaraSha256 $Plan.RequestPath) -ine $result.RequestSha256){throw 'Request changed during execution.'}
         $observed=Get-Content -LiteralPath $Plan.ResultPath -Raw|ConvertFrom-Json
@@ -147,9 +168,9 @@ function Invoke-TaraRevitQa {
         $result.NativeRunId=$observed.RunId
         $verified=Assert-TaraResult $Plan
         foreach($name in @('ReportPath','ReportSha256','NativeRunId','ResultSha256')){$result[$name]=$verified.$name};$result.Status='Passed'
-    }catch{$result.FailureReason=$_.Exception.Message;if($_.Exception -is [TimeoutException]){$result.Status='TimedOut'}}
+    }catch{$result.FailureReason=$_.Exception.Message;$result.Error=$_.Exception.Message;if($_.Exception -is [TimeoutException]){$result.Status='TimedOut'}}
     finally{
-        $result.FinishedUtc=[DateTimeOffset]::UtcNow.ToString('O')
+        $result.FinishedUtc=[DateTimeOffset]::UtcNow.ToString('O');$result.Success=($result.Status -ceq 'Passed')
         if($process){try{$process.Refresh();if($process.HasExited){$result.ExitState='Exited';$result.ExitCode=$process.ExitCode;$result.ProcessEndUtc=$process.ExitTime.ToUniversalTime().ToString('O')}else{$result.ExitState='Running'}}catch{$result.ExitState='Unknown'};$process.Dispose()}
         $result.SideEffectsPerformed=$true
         try{Write-TaraJsonNew $Plan.EvidencePath ([pscustomobject]$result)}catch{$result.FailureReason=([string]$result.FailureReason+' Evidence persistence failed: '+$_.Exception.Message);$result.Status='Failed'}

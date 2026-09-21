@@ -53,6 +53,8 @@ $tara = @{
 
 Dry run validates the prepared inputs, artifact, manifests, and policy and returns the exact proposed command with `SideEffectsPerformed = false`. It does not create a request, reserve the run, mutate the store, or start Revit. It can reject missing prerequisites; it is not a way to bypass them. Interactive-session validation applies to real execution.
 
+DryRun may be run as `rsgud` only when the approved QA paths are readable. An inaccessible `RepatoQA` add-in path is reported as a structured validation failure; the bridge never grants permissions or attempts to read through the denial. Real Tara execution must run in the logged-in, unlocked `RepatoQA` session.
+
 Only after Maya receives explicit Revit integration authorization and all prerequisites are satisfied, in the logged-in and unlocked `RepatoQA` session:
 
 ```powershell
