@@ -78,6 +78,14 @@ function Invoke-MayaQaTaraExecute {
             throw "Neil build or Tara handoff $kind hash mismatch."
         }
     }
+    if ($IntegrationTest) {
+        if ([IO.Path]::GetFileName($build.ArtifactPath) -ine 'Repato.Revit.dll' -or (Get-Item -LiteralPath $build.ArtifactPath).Length -lt 1024) {
+            throw 'Real integration requires a real Release DLL artifact.'
+        }
+        try { $artifactXml=[xml](Get-Content -LiteralPath $build.ManifestPath -Raw -ErrorAction Stop) }
+        catch { throw 'Real integration requires a real artifact manifest.' }
+        if ($artifactXml.DocumentElement.Name -cne 'RevitAddIns') { throw 'Real integration requires a real artifact manifest.' }
+    }
     Import-Module (Join-Path $PSScriptRoot 'Repato.TaraRevitQa.psm1') -WarningAction SilentlyContinue
     $qaRoot = Get-MayaQaRoot
     $context = [pscustomobject]@{
