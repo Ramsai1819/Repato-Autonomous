@@ -10,6 +10,8 @@ function Assert-Test([bool]$Condition, [string]$Message) {
     if (!$Condition) { throw $Message }
     $script:checkCount++
 }
+$moduleText = Get-Content -LiteralPath (Join-Path $PSScriptRoot 'Repato.TaraRevitQa.psm1') -Raw
+Assert-Test ($moduleText -match 'Repato\.Revit\.TestRunner\.GridBubbleVisibilityQaApplication' -and $moduleText -notmatch 'Repato\.Revit\.TestRunner\.GridBubbleQaApplication') 'Grid Bubble Visibility startup-class mapping is incorrect.'
 function Assert-Rejected([scriptblock]$Action, [string]$Pattern, [string]$Label) {
     $message = $null
     try { & $Action | Out-Null } catch { $message = $_.Exception.Message }
