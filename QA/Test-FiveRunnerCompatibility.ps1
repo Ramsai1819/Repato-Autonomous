@@ -1,6 +1,6 @@
 $ErrorActionPreference='Stop'
 $checks=@(
- 'Test-CreateGridsCompatibility.ps1','Test-CreateLevelsWorkflow.ps1',
+ 'Test-CreateGridsCompatibility.ps1','Test-CreateGridsRunnerMapping.ps1','Test-CreateLevelsWorkflow.ps1',
  'Test-GridBubbleVisibility.ps1','Test-GridBubbleVisibilityWorkflow.ps1',
  'Test-GridBubbleOffset.ps1','Test-GridBubbleOffsetWorkflow.ps1','Test-GridBubbleOffsetStartup.ps1',
  'Test-GridResequence.ps1','Test-GridResequenceWorkflow.ps1','Test-GridResequenceStartup.ps1','Test-GridResequenceReportSchema.ps1'

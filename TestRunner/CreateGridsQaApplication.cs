@@ -54,9 +54,17 @@ public sealed class CreateGridsQaApplication : IExternalApplication
                 !string.Equals(provenance.RootElement.GetProperty("sourceSha256").GetString(), TestRunReport.Hash(fixture), StringComparison.OrdinalIgnoreCase) ||
                 !string.Equals(provenance.RootElement.GetProperty("sourceSha256").GetString(), TestRunReport.Hash(model), StringComparison.OrdinalIgnoreCase)) throw new InvalidOperationException("Fixture provenance failed before opening the model.");
             app.OpenAndActivateDocument(model);
-            report = RepatoTestCommand.Run(app, CreateGridsTestCommand.SupportedTestId);
+            if (report.AddinIsolation is null)
+                throw new InvalidOperationException("Create Grids add-in inventory was not captured before native execution.");
+            report = RepatoTestCommand.Run(app, CreateGridsTestCommand.SupportedTestId, report.AddinIsolation);
         }
-        catch (Exception ex) { report.Status = "Failed"; report.Errors.Add(ex.ToString()); }
+        catch (Exception ex)
+        {
+            report.Status = "Failed";
+            report.Errors.Add("Create Grids isolation/execution failure: " + ex);
+            if (report.AddinIsolation is null)
+                report.Errors.Add("Add-in inventory diagnostic: policy path=" + AddinIsolationPolicy.PolicyPath + "; inventory object was null.");
+        }
         try
         {
             string reportPath = report.Write();
