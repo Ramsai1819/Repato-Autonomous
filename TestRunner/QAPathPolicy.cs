@@ -4,9 +4,9 @@ namespace Repato.Revit.TestRunner;
 
 internal static class QAPathPolicy
 {
-    internal const string RepositoryRoot = @"C:\Repato-Autonomous\Source";
-    internal const string RunsRoot = RepositoryRoot + @"\QA\TestRuns";
-    internal const string ReportsRoot = RepositoryRoot + @"\QA\Reports";
+    internal static string RepositoryRoot => Environment.GetEnvironmentVariable("REPATO_QA_REPOSITORY_ROOT") ?? @"C:\Repato-Autonomous\Source";
+    internal static string RunsRoot => RepositoryRoot + @"\QA\TestRuns";
+    internal static string ReportsRoot => RepositoryRoot + @"\QA\Reports";
     internal static string ValidatePath(string path, string parent, bool requireRvt)
     {
         if (string.IsNullOrWhiteSpace(path) || !Path.IsPathFullyQualified(path) || path.StartsWith(@"\\", StringComparison.Ordinal))

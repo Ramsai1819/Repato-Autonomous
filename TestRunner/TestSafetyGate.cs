@@ -8,10 +8,10 @@ namespace Repato.Revit.TestRunner;
 internal static class TestSafetyGate
 {
     internal static readonly string[] ApprovedGridBubbleFixtureNames = FixtureContentPolicy.ApprovedGridNames;
-    internal const string RepositoryRoot = QAPathPolicy.RepositoryRoot;
-    internal const string RunsRoot = RepositoryRoot + @"\QA\TestRuns";
-    internal const string ReportsRoot = RepositoryRoot + @"\QA\Reports";
-    private const string FixturesRoot = RepositoryRoot + @"\QA\Fixtures";
+    internal static string RepositoryRoot => QAPathPolicy.RepositoryRoot;
+    internal static string RunsRoot => RepositoryRoot + @"\QA\TestRuns";
+    internal static string ReportsRoot => RepositoryRoot + @"\QA\Reports";
+    private static string FixturesRoot => RepositoryRoot + @"\QA\Fixtures";
 
     internal static void Verify(Document document, TestRunReport report, string? requiredFixtureId = null)
     {
