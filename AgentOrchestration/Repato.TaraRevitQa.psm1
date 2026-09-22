@@ -114,6 +114,17 @@ function Stop-TaraOwnedProcess($Process){
     # Never discover/reacquire by PID or name. The original Process handle owns this termination.
     $Process.Refresh();if(!$Process.HasExited){$Process.Kill();[void]$Process.WaitForExit(5000)}
 }
+function Close-TaraOwnedProcess($Process,[int]$GraceSeconds=30){
+    $Process.Refresh(); if($Process.HasExited){ return [pscustomobject]@{State='Exited';ExitCode=$Process.ExitCode;Forced=$false} }
+    $requested=$false; try{$requested=$Process.CloseMainWindow()}catch{}
+    $deadline=[DateTime]::UtcNow.AddSeconds($GraceSeconds)
+    while(!$Process.HasExited -and [DateTime]::UtcNow -lt $deadline){Start-Sleep -Seconds 1;$Process.Refresh()}
+    if(!$Process.HasExited){ Stop-TaraOwnedProcess $Process; return [pscustomobject]@{State='ForceTerminated';ExitCode=$Process.ExitCode;Forced=$true} }
+    return [pscustomobject]@{State='Exited';ExitCode=$Process.ExitCode;Forced=$false}
+}
+function Assert-TaraModelUnlocked([string]$Path){
+    $stream=[IO.FileStream]::new($Path,[IO.FileMode]::Open,[IO.FileAccess]::Read,[IO.FileShare]::None);$stream.Dispose()
+}
 function Wait-TaraResult($Plan,$Process){
     $timer=[Diagnostics.Stopwatch]::StartNew()
     while(!(Test-Path -LiteralPath $Plan.ResultPath -PathType Leaf)){
@@ -178,7 +189,7 @@ function Invoke-TaraRevitQa {
     }catch{$result.FailureReason=$_.Exception.Message;$result.Error=$_.Exception.Message;if($_.Exception -is [TimeoutException]){$result.Status='TimedOut'}}
     finally{
         $result.FinishedUtc=[DateTimeOffset]::UtcNow.ToString('O');$result.Success=($result.Status -ceq 'Passed')
-        if($process){try{$process.Refresh();if($process.HasExited){$result.ExitState='Exited';$result.ExitCode=$process.ExitCode;$result.ProcessEndUtc=$process.ExitTime.ToUniversalTime().ToString('O')}else{$result.ExitState='Running'}}catch{$result.ExitState='Unknown'};$process.Dispose()}
+        if($process){try{$cleanup=Close-TaraOwnedProcess $process;if($cleanup.Forced){$result.ExitState='ForceTerminated';$result.FailureReason=([string]$result.FailureReason+' Graceful Revit close timed out; bridge-owned process force-terminated.')}else{$result.ExitState='Exited'};$result.ExitCode=$cleanup.ExitCode;$process.Refresh();$result.ProcessEndUtc=$process.ExitTime.ToUniversalTime().ToString('O');Assert-TaraModelUnlocked $Plan.ModelPath}catch{$result.ExitState='CleanupFailed';$result.FailureReason=([string]$result.FailureReason+' Cleanup failed: '+$_.Exception.Message);$result.Error=$result.FailureReason};$process.Dispose()}
         $result.SideEffectsPerformed=$true
         try{Write-TaraJsonNew $Plan.EvidencePath ([pscustomobject]$result)}catch{$result.FailureReason=([string]$result.FailureReason+' Evidence persistence failed: '+$_.Exception.Message);$result.Status='Failed'}
     }
