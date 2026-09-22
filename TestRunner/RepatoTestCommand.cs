@@ -44,9 +44,9 @@ public sealed class RepatoTestCommand : IExternalCommand
         }
     }
 
-    public static TestRunReport Run(UIApplication application, string testId)
+    public static TestRunReport Run(UIApplication application, string testId, AddinInventory? addinIsolation = null)
     {
-        var report = new TestRunReport { TestId = testId };
+        var report = new TestRunReport { TestId = testId, AddinIsolation = addinIsolation };
         var timer = Stopwatch.StartNew();
 
         try

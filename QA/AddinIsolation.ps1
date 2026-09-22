@@ -70,8 +70,11 @@ function Get-AddinIsolationInventory {
 function Assert-ReportedAddinIsolation {
     param($RequestInventory, $ReportInventory)
     foreach ($inventory in @($RequestInventory, $ReportInventory)) {
-        if ($null -eq $inventory -or $inventory.Allowed -isnot [bool] -or !$inventory.Allowed -or
-            @($inventory.Errors).Count -ne 0 -or $null -eq $inventory.DetectedAddins) { throw 'Missing or failed add-in inventory.' }
+        if ($null -eq $inventory) { throw 'Missing add-in inventory object.' }
+        if ($inventory.Allowed -isnot [bool] -or !$inventory.Allowed -or @($inventory.Errors).Count -ne 0 -or $null -eq $inventory.DetectedAddins) {
+            $details = (@($inventory.Errors) -join '; ')
+            throw "Add-in inventory failed. Policy='$($inventory.PolicyPath)' Allowed='$($inventory.Allowed)' Errors='$details' DetectedCount=$(@($inventory.DetectedAddins).Count)."
+        }
         $seen = @{}
         foreach ($item in $inventory.DetectedAddins) {
             if ($item.Scope -notin @('MachineWide','UserProfile') -or $item.Allowlisted -isnot [bool] -or !$item.Allowlisted -or
