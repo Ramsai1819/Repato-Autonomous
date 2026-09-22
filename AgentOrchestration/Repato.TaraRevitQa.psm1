@@ -55,7 +55,8 @@ function New-TaraRevitQaPlan {
         'create-levels'=@('Repato.CreateLevels.TestRunner.addin','REPATO_QA_LEVELS_REQUEST','Invoke-CreateLevelsQA.ps1','Repato.Revit.TestRunner.CreateLevelsQaApplication')
         'grid-bubble-visibility-v1'=@('Repato.GridBubbleVisibility.TestRunner.addin','REPATO_QA_GRID_BUBBLE_REQUEST','Invoke-GridBubbleVisibilityQA.ps1','Repato.Revit.TestRunner.GridBubbleVisibilityQaApplication')
         'grid-bubble-offset-v1'=@('Repato.GridBubbleOffset.TestRunner.addin','REPATO_QA_GRID_BUBBLE_OFFSET_REQUEST','Invoke-GridBubbleOffsetQA.ps1','Repato.Revit.TestRunner.GridBubbleOffsetQaApplication')
-        'grid-resequence-v1'=@('Repato.GridResequence.TestRunner.addin','REPATO_QA_GRID_RESEQUENCE_REQUEST','Invoke-GridResequenceQA.ps1','Repato.Revit.TestRunner.GridResequenceQaApplication')
+          'grid-resequence-v1'=@('Repato.GridResequence.TestRunner.addin','REPATO_QA_GRID_RESEQUENCE_REQUEST','Invoke-GridResequenceQA.ps1','Repato.Revit.TestRunner.GridResequenceQaApplication')
+          'create-grids-world-axis-v1'=@('Repato.CreateGrids.TestRunner.addin','REPATO_QA_CREATE_GRIDS_REQUEST','Invoke-CreateGridsQA.ps1','Repato.Revit.TestRunner.CreateGridsQaApplication')
     }
     if(!$runners.ContainsKey($QaWorkflowId)){throw 'Workflow has no supported unattended startup runner (Welcome requires supervision; Create Grids has no startup application).'}
     foreach($name in @('TaskId','WorkflowId','QaWorkflowId','RunId')){ $value=Get-Variable $name -ValueOnly;if($value -notmatch '^[A-Za-z0-9][A-Za-z0-9_-]{0,127}$' -or $Context.$name -cne $value){throw "Wrong workflow identity: $name"} }

@@ -1,0 +1,18 @@
+<?xml version="1.0" encoding="utf-8"?>
+<RevitAddIns>
+  <AddIn Type="Application">
+    <Name>Repato Create Grids QA Startup</Name>
+    <Assembly>.\RepatoQA\Repato.Revit.dll</Assembly>
+    <AddInId>F5A4E0AB-25E4-4BA2-A5D8-2CA9F0E2A401</AddInId>
+    <FullClassName>Repato.Revit.TestRunner.CreateGridsQaApplication</FullClassName>
+    <VendorId>RPT0</VendorId>
+  </AddIn>
+  <AddIn Type="Command">
+    <Name>Repato QA Create Grids Runner</Name>
+    <Assembly>.\RepatoQA\Repato.Revit.dll</Assembly>
+    <AddInId>0D9AA4D8-2F8E-4B59-9B8D-8A0D0C1D8D22</AddInId>
+    <FullClassName>Repato.Revit.TestRunner.CreateGridsTestCommand</FullClassName>
+    <Text>Repato QA - Create Grids</Text>
+    <VendorId>RPT0</VendorId>
+  </AddIn>
+</RevitAddIns>
