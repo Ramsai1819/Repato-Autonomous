@@ -18,9 +18,9 @@ public sealed record DetectedAddin(string Scope, string Path, string Sha256, boo
 
 public static class AddinIsolationPolicy
 {
-    public const string PolicyPath = @"C:\Repato-Autonomous\Source\QA\MachineWideAddins.allowlist.json";
+    public static string PolicyPath => Path.Combine(Environment.GetEnvironmentVariable("REPATO_QA_REPOSITORY_ROOT") ?? @"C:\Repato-Autonomous\Source", "QA", "MachineWideAddins.allowlist.json");
     public const string MachineWideRoot = @"C:\ProgramData\Autodesk\Revit\Addins\2025";
-    private const string SourceRoot = @"C:\Repato-Autonomous\Source\QA";
+    private static string SourceRoot => Path.Combine(Environment.GetEnvironmentVariable("REPATO_QA_REPOSITORY_ROOT") ?? @"C:\Repato-Autonomous\Source", "QA");
 
     public static AddinInventory Inspect()
     {

@@ -107,6 +107,7 @@ function Start-TaraProcess($Plan){
     # Environment changes are confined to this child. Clear every other QA dispatch.
     foreach($key in @($info.EnvironmentVariables.Keys)){if($key -like 'REPATO_QA_*_REQUEST'){$info.EnvironmentVariables.Remove($key)}}
     $info.EnvironmentVariables[$Plan.EnvironmentVariable]=$Plan.RequestPath
+    $info.EnvironmentVariables['REPATO_QA_REPOSITORY_ROOT']=(Split-Path (Split-Path $Plan.VerifierPath -Parent) -Parent)
     $child=[Diagnostics.Process]::Start($info);$null=$child.Handle;return $child
 }
 function Stop-TaraOwnedProcess($Process){
