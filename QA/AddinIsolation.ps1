@@ -6,6 +6,7 @@ function Get-AddinIsolationInventory {
         PolicyPath = $PolicyPath; PolicySha256 = ''; DetectedAddins = @(); Errors = @(); Allowed = $false
     }
     $approved = @{}
+    $qaManifestHashes = @{ 'Repato.CreateGrids.TestRunner.addin' = 'D4A749B573240725B904938ED4260F15AF54314B2D5F8DF0F51B0CC6389AF63D' }
     try {
         $PolicyPath = Assert-ChildPath $PolicyPath $QaSourceRoot
         $inventory.PolicySha256 = Get-Sha256 $PolicyPath
@@ -45,9 +46,10 @@ function Get-AddinIsolationInventory {
                 elseif ($scope -eq 'UserProfile') {
                     # Only the two repository-owned QA bootstrap manifests are eligible.
                     # The machine-wide allowlist can never authorize a user-profile add-in.
-                    if ($file.Name -in @('Repato.CreateLevels.TestRunner.addin','Repato.TestRunner.addin','Repato.GridBubbleVisibility.TestRunner.addin','Repato.GridBubbleOffset.TestRunner.addin','Repato.GridResequence.TestRunner.addin','Repato.WelcomeSmoke.TestRunner.addin')) {
+                    if ($file.Name -in @('Repato.CreateLevels.TestRunner.addin','Repato.CreateGrids.TestRunner.addin','Repato.TestRunner.addin','Repato.GridBubbleVisibility.TestRunner.addin','Repato.GridBubbleOffset.TestRunner.addin','Repato.GridResequence.TestRunner.addin','Repato.WelcomeSmoke.TestRunner.addin')) {
                         $source = Assert-ChildPath (Join-Path $QaSourceRoot $file.Name) $QaSourceRoot
-                        $detected.Allowlisted = $detected.Sha256 -ieq (Get-Sha256 $source)
+                        $sourceHash = Get-Sha256 $source
+                        $detected.Allowlisted = $detected.Sha256 -ieq $sourceHash -and (!$qaManifestHashes.ContainsKey($file.Name) -or $detected.Sha256 -ieq $qaManifestHashes[$file.Name])
                         $detected.Reason = if ($detected.Allowlisted) { 'Repository-owned QA manifest verified against source' } else { 'QA manifest differs from repository source' }
                     }
                     else { $detected.Reason = 'User-profile add-in prohibited' }

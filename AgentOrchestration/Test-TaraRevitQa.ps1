@@ -12,6 +12,9 @@ function Assert-Test([bool]$Condition, [string]$Message) {
 }
 $moduleText = Get-Content -LiteralPath (Join-Path $PSScriptRoot 'Repato.TaraRevitQa.psm1') -Raw
 Assert-Test ($moduleText -match 'Repato\.Revit\.TestRunner\.GridBubbleVisibilityQaApplication' -and $moduleText -notmatch 'Repato\.Revit\.TestRunner\.GridBubbleQaApplication') 'Grid Bubble Visibility startup-class mapping is incorrect.'
+Assert-Test ($moduleText -match "create-grids-world-axis-v1.*Repato\.CreateGrids\.TestRunner\.addin.*REPATO_QA_CREATE_GRIDS_REQUEST.*Repato\.Revit\.TestRunner\.CreateGridsQaApplication") 'Create Grids startup mapping is missing or incorrect.'
+Assert-Test (Test-Path (Join-Path $PSScriptRoot '..\QA\Repato.CreateGrids.TestRunner.addin') -PathType Leaf) 'Create Grids QA manifest is missing.'
+Assert-Test ((Get-FileHash (Join-Path $PSScriptRoot '..\QA\Repato.CreateGrids.TestRunner.addin') -Algorithm SHA256).Hash -ceq 'D4A749B573240725B904938ED4260F15AF54314B2D5F8DF0F51B0CC6389AF63D') 'Create Grids QA manifest hash is not approved.'
 function Assert-Rejected([scriptblock]$Action, [string]$Pattern, [string]$Label) {
     $message = $null
     try { & $Action | Out-Null } catch { $message = $_.Exception.Message }
