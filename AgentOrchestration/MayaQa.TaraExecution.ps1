@@ -32,11 +32,10 @@ function Invoke-MayaQaTaraExecute {
     if ($properties -contains 'qaTaraExecutionStatus' -and $workflow.qaTaraExecutionStatus) {
         throw 'Duplicate Tara execution rejected. Preserve the existing execution and prepare a new workflow for any retry.'
     }
-    foreach ($required in @('qaBuildEvidence','qaBuildStatus','qaHandoff','qaHandoffId',
-        'qaRunId','qaWorkflowId','qaModelPath','qaSidecarPath','qaFixtureId','qaFixtureSha256','qaTestId',
-        'qaApprovalId','qaApprovalStatus')) {
-        if ($properties -notcontains $required -or !$workflow.$required) { throw "Required Tara prerequisite is missing: $required" }
-    }
+    $missing=@(); foreach ($required in @('qaBuildEvidence','qaBuildStatus','qaHandoff','qaHandoffId','qaApprovalId','qaApprovalStatus',
+        'qaRunId','qaWorkflowId','qaModelPath','qaSidecarPath','qaFixtureId','qaFixtureSha256','qaTestId'
+        )) { if ($properties -notcontains $required -or !$workflow.$required) { $missing += $required } }
+    if($missing.Count){throw "Required Tara prerequisites are missing: $($missing -join ', ')"}
     $approval = @($task.approvalRequests | Where-Object {
         $_.requestId -ceq $workflow.qaApprovalId -and $_.action -ceq 'qa-run' -and $_.status -ceq 'approved'
     })
