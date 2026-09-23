@@ -179,7 +179,14 @@ function Invoke-MayaQaRequest {
     if($DryRun){return [pscustomobject]@{Success=$true;Mode='DryRun';TaskId=$taskId;WorkflowId=$workflowId;QaWorkflowId=$qaId;RunId=$runId;FixtureId=$def.FixtureId;NativeTestId=$def.TestId;Stages=@('intake','build-request','build-execute','handoff','tara-execute','report-verify','complete','receipt','dashboard');SideEffectsPerformed=$false;Error=$null}}
     if([string]::IsNullOrWhiteSpace($ProjectPath)){throw 'ProjectPath is required for real Maya request orchestration.'}
     $intake=Invoke-MayaQaIntake $taskId $workflowId $qaId $UserRequest
-    [pscustomobject]@{Success=$false;Mode='Real';TaskId=$taskId;WorkflowId=$workflowId;QaWorkflowId=$qaId;RunId=$runId;Stage='intake-complete';Next='qa-build-request';Intake=$intake;SideEffectsPerformed=$true;Error='Build and Tara execution require explicit lifecycle operations with their persisted paths.'}
+    $buildRequest=New-MayaQaBuildRequest -StoreRoot $StoreRoot -TaskId $taskId -WorkflowId $workflowId -QaWorkflowId $qaId -UserRequest $UserRequest -SourceBranch $SourceBranch -ProjectPath $ProjectPath
+    $build=Invoke-MayaQaBuildExecute -StoreRoot $StoreRoot -TaskId $taskId -WorkflowId $workflowId -QaWorkflowId $qaId -SourceBranch $SourceBranch -ProjectPath $ProjectPath
+    if($build.BuildStatus -cne 'succeeded' -or [string]::IsNullOrWhiteSpace($build.ArtifactPath) -or [string]::IsNullOrWhiteSpace($build.ArtifactSha256) -or !(Test-Path -LiteralPath $build.ArtifactPath -PathType Leaf)){throw 'Neil build did not produce a verified artifact.'}
+    if((Get-FileHash -LiteralPath $build.ArtifactPath -Algorithm SHA256).Hash -ine $build.ArtifactSha256){throw 'Neil artifact SHA-256 verification failed.'}
+    if([string]::IsNullOrWhiteSpace($build.ManifestPath) -or (Get-FileHash -LiteralPath $build.ManifestPath -Algorithm SHA256).Hash -ine $build.ManifestSha256){throw 'Neil artifact manifest SHA-256 verification failed.'}
+    $run=New-MayaQaRun -StoreRoot $StoreRoot -TaskId $taskId -WorkflowId $workflowId -QaWorkflowId $qaId -RunId $runId
+    $handoff=New-MayaQaHandoff -StoreRoot $StoreRoot -TaskId $taskId -WorkflowId $workflowId -QaWorkflowId $qaId
+    [pscustomobject]@{Success=$true;Mode='Real';TaskId=$taskId;WorkflowId=$workflowId;QaWorkflowId=$qaId;RunId=$runId;Stage='handoff-ready';Intake=$intake;BuildRequest=$buildRequest;Build=$build;Run=$run;Handoff=$handoff;SideEffectsPerformed=$true;Error=$null}
 }
 function Invoke-MayaQaBuildExecute {
     param([Parameter(Mandatory)][string]$StoreRoot,[Parameter(Mandatory)][string]$TaskId,[Parameter(Mandatory)][string]$WorkflowId,[Parameter(Mandatory)][string]$QaWorkflowId,[string]$SourceBranch='current',[string]$ProjectPath='Forma.RevitConnector.csproj',[switch]$DryRun)
