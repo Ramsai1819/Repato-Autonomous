@@ -47,6 +47,7 @@ param(
     [string]$ReportDirectory,
     [string]$RevitInstallDir = 'E:\revit\Revit 2025',
     [string]$QaAddinRoot,
+    [string]$HandoffPath,
     [ValidateRange(1,3600)][int]$TimeoutSeconds = 900,
     [switch]$LocalRun,
     [switch]$IntegrationTest,
@@ -67,7 +68,7 @@ try {
             Invoke-MayaQaTaraExecute -StoreRoot $StoreRoot -TaskId $TaskId -WorkflowId $WorkflowId `
                 -QaWorkflowId $QaWorkflowId -RunId $RunId -ModelPath $ModelPath -SidecarPath $SidecarPath `
                 -ReportDirectory $ReportDirectory -RevitInstallDir $RevitInstallDir -QaAddinRoot $QaAddinRoot `
-                -TimeoutSeconds $TimeoutSeconds -DryRun:$DryRun -LocalRun:$LocalRun -IntegrationTest:$IntegrationTest
+                -TimeoutSeconds $TimeoutSeconds -DryRun:$DryRun -LocalRun:$LocalRun -IntegrationTest:$IntegrationTest -HandoffPath $HandoffPath
         }
         'qa-intake' {
             Invoke-MayaQaIntake `
