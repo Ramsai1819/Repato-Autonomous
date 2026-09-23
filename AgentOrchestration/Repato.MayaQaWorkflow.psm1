@@ -3,6 +3,7 @@ $script:Definitions = @{
     'welcome-smoke' = @{ FixtureId='CreateLevelsEmpty'; Source='CreateLevelsEmpty.rvt'; Prep=$null; TestId='welcome-supervised-dialog-v1'; Capabilities=@('prepare-fixture','report-verify','complete') }
     'create-grids-world-axis-v1' = @{ FixtureId='CreateGridsEmptyPlan'; Source='CreateGridsEmptyPlan.rvt'; Prep='Prepare-CreateGridsQaRun.ps1'; TestId='create-grids-world-axis-v1'; Capabilities=@('prepare-fixture','report-verify','complete') }
         'create-levels' = @{ FixtureId='CreateLevelsEmpty'; Source='CreateLevelsEmpty.rvt'; Prep='Prepare-CreateLevelsQaRun.ps1'; TestId='create-levels-elevations-v1'; Capabilities=@('prepare-fixture','report-verify','complete') }
+    'create-levels-elevations-v1' = @{ FixtureId='CreateLevelsEmpty'; Source='CreateLevelsEmpty.rvt'; Prep='Prepare-CreateLevelsQaRun.ps1'; TestId='create-levels-elevations-v1'; Capabilities=@('prepare-fixture','report-verify','complete') }
     'grid-bubble-visibility-v1' = @{ FixtureId='GridBubbleVisibilityEmpty'; Source='GridBubbleVisibilityEmpty.rvt'; Prep='Prepare-GridBubbleVisibilityQaRun.ps1'; TestId='grid-bubble-visibility-v1'; Capabilities=@('prepare-fixture','report-verify','complete') }
     'grid-bubble-offset-v1' = @{ FixtureId='GridBubbleOffsetEmpty'; Source='GridBubbleOffsetEmpty.rvt'; Prep='Prepare-GridBubbleOffsetQaRun.ps1'; TestId='grid-bubble-offset-v1'; Capabilities=@('prepare-fixture','report-verify','complete') }
     'grid-resequence-v1' = @{ FixtureId='GridResequenceEmpty'; Source='GridResequenceEmpty.rvt'; Prep='Prepare-GridResequenceQaRun.ps1'; TestId='grid-resequence-all-directions-v1'; Capabilities=@('prepare-fixture','report-verify','complete') }
@@ -170,10 +171,27 @@ function Invoke-MayaQaIntake {
         SideEffectsPerformed = $true
     }
 }
+function Resolve-MayaQaRequestWorkflow {
+    param([Parameter(Mandatory)][string]$Request)
+    $text=$Request.Trim().ToLowerInvariant()
+    $map=@{
+        'create-grids-world-axis-v1'='create-grids-world-axis-v1';'create grids'='create-grids-world-axis-v1';'create grids world axis'='create-grids-world-axis-v1';
+        'create-levels-elevations-v1'='create-levels-elevations-v1';'create-levels'='create-levels-elevations-v1';'create levels'='create-levels-elevations-v1';
+        'grid-bubble-visibility-v1'='grid-bubble-visibility-v1';'grid bubble visibility'='grid-bubble-visibility-v1';
+        'grid-bubble-offset-v1'='grid-bubble-offset-v1';'grid bubble offset'='grid-bubble-offset-v1';
+        'grid-resequence-v1'='grid-resequence-v1';'grid resequence'='grid-resequence-v1'
+    }
+    if($map.ContainsKey($text)){return $map[$text]}
+    if($text -match 'eight grids|create grids|world axis'){return 'create-grids-world-axis-v1'}
+    if($text -match 'create levels'){return 'create-levels-elevations-v1'}
+    if($text -match 'bubble visibility'){return 'grid-bubble-visibility-v1'}
+    if($text -match 'bubble offset'){return 'grid-bubble-offset-v1'}
+    if($text -match 'resequence'){return 'grid-resequence-v1'}
+    throw 'User request does not identify a supported QA workflow.'
+}
 function Invoke-MayaQaRequest {
     param([Parameter(Mandatory)][string]$StoreRoot,[Parameter(Mandatory)][string]$UserRequest,[string]$SourceBranch='main',[string]$ProjectPath,[switch]$DryRun)
-    $text=$UserRequest.ToLowerInvariant();$qaId=if($text -match 'eight grids|create grids|world axis'){'create-grids-world-axis-v1'}elseif($text -match 'create levels'){'create-levels'}elseif($text -match 'bubble visibility'){'grid-bubble-visibility-v1'}elseif($text -match 'bubble offset'){'grid-bubble-offset-v1'}elseif($text -match 'resequence'){'grid-resequence-v1'}else{$null}
-    if(!$qaId){throw 'Unsupported QA request. Specify a supported workflow request.'}
+    $qaId=Resolve-MayaQaRequestWorkflow $UserRequest
     $taskId='task-'+[guid]::NewGuid().ToString('N');$workflowId='workflow-'+[guid]::NewGuid().ToString('N');$runId=[guid]::NewGuid().ToString('N')
     $def=Get-MayaQaWorkflowDefinition $qaId
     if($DryRun){return [pscustomobject]@{Success=$true;Mode='DryRun';TaskId=$taskId;WorkflowId=$workflowId;QaWorkflowId=$qaId;RunId=$runId;FixtureId=$def.FixtureId;NativeTestId=$def.TestId;Stages=@('intake','build-request','build-execute','handoff','tara-execute','report-verify','complete','receipt','dashboard');SideEffectsPerformed=$false;Error=$null}}
@@ -500,4 +518,4 @@ function Invoke-MayaQaOverview { param([Parameter(Mandatory)][ValidateSet('qa-ca
     [pscustomobject]@{Operation=$Route;TimestampUtc=(Get-Date).ToUniversalTime().ToString('O');WorkflowId=$WorkflowId;QaWorkflowId=$QaWorkflowId;ResultStatus='ok';SideEffectsPerformed=$false;Result=$result}
 }
 . (Join-Path $PSScriptRoot 'MayaQa.TaraExecution.ps1')
-Export-ModuleMember -Function Invoke-MayaQaTaraExecute,Invoke-MayaQaRequest,Get-MayaQaWorkflowDefinition,Get-MayaQaWorkflowCatalog,Get-MayaQaCatalogDryRun,Get-MayaQaWorkflowStatus,Invoke-MayaQaIntake,New-MayaQaBuildRequest,Invoke-MayaQaBuildExecute,New-MayaQaHandoff,Submit-MayaQaReport,Get-MayaQaDashboard,Invoke-MayaQaOverview,New-MayaQaBootstrap,New-MayaQaRun,Register-MayaQaReport,Complete-MayaQaWorkflow,New-MayaQaReceipt,Get-MayaQaReceiptStatus
+Export-ModuleMember -Function Invoke-MayaQaTaraExecute,Resolve-MayaQaRequestWorkflow,Invoke-MayaQaRequest,Get-MayaQaWorkflowDefinition,Get-MayaQaWorkflowCatalog,Get-MayaQaCatalogDryRun,Get-MayaQaWorkflowStatus,Invoke-MayaQaIntake,New-MayaQaBuildRequest,Invoke-MayaQaBuildExecute,New-MayaQaHandoff,Submit-MayaQaReport,Get-MayaQaDashboard,Invoke-MayaQaOverview,New-MayaQaBootstrap,New-MayaQaRun,Register-MayaQaReport,Complete-MayaQaWorkflow,New-MayaQaReceipt,Get-MayaQaReceiptStatus
