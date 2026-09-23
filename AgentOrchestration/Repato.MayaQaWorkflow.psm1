@@ -306,6 +306,9 @@ function New-MayaQaHandoff {
     }
 
     $evidence = $workflow.qaBuildEvidence
+    $taskData=Read-RepatoTaskStore $StoreRoot; $task=Find-RepatoTask $taskData $TaskId
+    $approvedApproval=@($task.approvalRequests|Where-Object {$_.action -ceq 'qa-run' -and $_.status -ceq 'approved'})[-1]
+    if($null -eq $approvedApproval){throw 'Approved qa-run approval is required before Tara handoff.'}
     foreach ($item in @(
         @('artifact', $evidence.ArtifactPath, $evidence.ArtifactSha256),
         @('manifest', $evidence.ManifestPath, $evidence.ManifestSha256)
@@ -323,7 +326,6 @@ function New-MayaQaHandoff {
     $handoffId = 'handoff-' + [guid]::NewGuid().ToString('N')
     $coordinatorRunId = 'qa-run-' + [guid]::NewGuid().ToString('N')
     $data = Read-RepatoTaskStore $StoreRoot
-    $task = Find-RepatoTask $data $TaskId
     $mutation = @(Invoke-RepatoWorkflowMutation $StoreRoot $TaskId $WorkflowId $workflow.workflowRevision $task.revision {
         param($current)
         $handoff = [pscustomobject]@{
@@ -342,12 +344,18 @@ function New-MayaQaHandoff {
             SidecarPath = $(if($current.PSObject.Properties.Name -contains 'qaSidecarPath'){$current.qaSidecarPath}else{$null})
             CoordinatorRunId = $coordinatorRunId
             HandoffStatus = 'ready'
+            QaApprovalId = $approvedApproval.requestId
+            QaApprovalStatus = 'approved'
             CreatedUtc = (Get-Date).ToUniversalTime().ToString('O')
         }
         $current | Add-Member -NotePropertyName qaHandoffId -NotePropertyValue $handoffId -Force
         $current | Add-Member -NotePropertyName qaHandoff -NotePropertyValue $handoff -Force
+        $current | Add-Member -NotePropertyName qaApprovalId -NotePropertyValue $approvedApproval.requestId -Force
+        $current | Add-Member -NotePropertyName qaApprovalStatus -NotePropertyValue 'approved' -Force
         return $current
     })[-1]
+    $handoffPath=Join-Path (Join-Path $StoreRoot 'handoffs') ($handoffId+'.json');New-Item -ItemType Directory -Path (Split-Path $handoffPath -Parent) -Force|Out-Null
+    [ordered]@{StoreRoot=$StoreRoot;TaskId=$TaskId;WorkflowId=$WorkflowId;QaWorkflowId=$QaWorkflowId;RunId=$workflow.qaRunId;HandoffId=$handoffId;QaApprovalId=$approvedApproval.requestId;QaApprovalStatus='approved';ModelPath=$workflow.qaModelPath;SidecarPath=$workflow.qaSidecarPath;ArtifactPath=$evidence.ArtifactPath;ArtifactSha256=$artifactHash;ManifestPath=$evidence.ManifestPath;ManifestSha256=$manifestHash}|ConvertTo-Json -Depth 10|Set-Content -LiteralPath $handoffPath -Encoding UTF8
     [pscustomobject]@{
         HandoffId = $handoffId
         TaskId = $TaskId
@@ -365,6 +373,9 @@ function New-MayaQaHandoff {
         SidecarPath = $(if($properties -contains 'qaSidecarPath'){$workflow.qaSidecarPath}else{$null})
         CoordinatorRunId = $coordinatorRunId
         HandoffStatus = 'ready'
+        HandoffPath = $handoffPath
+        QaApprovalId = $approvedApproval.requestId
+        QaApprovalStatus = 'approved'
         WorkflowRevision = $mutation.Workflow.workflowRevision
         TaskRevision = $mutation.TaskRevision
         SideEffectsPerformed = $true
