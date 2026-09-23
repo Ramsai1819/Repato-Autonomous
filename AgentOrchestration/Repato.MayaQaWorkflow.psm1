@@ -189,6 +189,14 @@ function Invoke-MayaQaRequest {
     $def=Get-MayaQaWorkflowDefinition $qaId
     if($DryRun){return [pscustomobject]@{Success=$true;Mode='DryRun';TaskId=$taskId;WorkflowId=$workflowId;QaWorkflowId=$qaId;RunId=$runId;FixtureId=$def.FixtureId;NativeTestId=$def.TestId;Stages=@('intake','build-request','build-execute','handoff','tara-execute','report-verify','complete','receipt','dashboard');SideEffectsPerformed=$false;Error=$null}}
     if([string]::IsNullOrWhiteSpace($ProjectPath)){throw 'ProjectPath is required for real Maya request orchestration.'}
+    $null=Initialize-RepatoTaskStore $StoreRoot
+    $existing=Find-RepatoTask (Read-RepatoTaskStore $StoreRoot) $taskId
+    if($null -eq $existing){ New-RepatoTask $StoreRoot $taskId 'Maya QA request' $UserRequest 'qa/maya-qa-workflow' 'maya' | Out-Null }
+    $workflowExisting=$null; try{$workflowExisting=Get-DeployWorkflow $StoreRoot $taskId $workflowId}catch{}
+    if($null -eq $workflowExisting){
+        $root=[IO.Path]::GetFullPath((Join-Path $PSScriptRoot '..'));$plan=New-DeployPlan $StoreRoot $taskId (Join-Path $root 'bin\Release\net8.0-windows\Repato.Revit.dll') (Join-Path $root 'Repato.addin') -TargetRoot (Join-Path ([IO.Path]::GetTempPath()) ('maya-request-'+$runId));
+        $plan.workflowId=$workflowId; New-DeployWorkflow $StoreRoot $plan | Out-Null
+    }
     $intake=Invoke-MayaQaIntake $taskId $workflowId $qaId $UserRequest
     $buildRequest=New-MayaQaBuildRequest -StoreRoot $StoreRoot -TaskId $taskId -WorkflowId $workflowId -QaWorkflowId $qaId -UserRequest $UserRequest -SourceBranch $SourceBranch -ProjectPath $ProjectPath
     $build=Invoke-MayaQaBuildExecute -StoreRoot $StoreRoot -TaskId $taskId -WorkflowId $workflowId -QaWorkflowId $qaId -SourceBranch $SourceBranch -ProjectPath $ProjectPath
