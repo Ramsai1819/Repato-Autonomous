@@ -2,13 +2,13 @@
 function Invoke-MayaQaTaraExecute {
     [CmdletBinding()]
     param(
-        [Parameter(Mandatory)][string]$StoreRoot,
-        [Parameter(Mandatory)][string]$TaskId,
-        [Parameter(Mandatory)][string]$WorkflowId,
-        [Parameter(Mandatory)][string]$QaWorkflowId,
-        [Parameter(Mandatory)][string]$RunId,
-        [Parameter(Mandatory)][string]$ModelPath,
-        [Parameter(Mandatory)][string]$SidecarPath,
+        [string]$StoreRoot,
+        [string]$TaskId,
+        [string]$WorkflowId,
+        [string]$QaWorkflowId,
+        [string]$RunId,
+        [string]$ModelPath,
+        [string]$SidecarPath,
         [Parameter(Mandatory)][string]$ReportDirectory,
         [string]$RevitInstallDir = 'E:\revit\Revit 2025',
         [Parameter(Mandatory)][string]$QaAddinRoot,
@@ -18,7 +18,8 @@ function Invoke-MayaQaTaraExecute {
         [switch]$IntegrationTest
         ,[string]$HandoffPath
     )
-    if($HandoffPath){$h=Get-Content -LiteralPath $HandoffPath -Raw|ConvertFrom-Json;foreach($n in @('StoreRoot','TaskId','WorkflowId','QaWorkflowId','RunId','HandoffId','ModelPath','SidecarPath','ArtifactPath','ArtifactSha256','ManifestPath','ManifestSha256')){if($h.PSObject.Properties.Name -notcontains $n -or [string]::IsNullOrWhiteSpace([string]$h.$n)){throw "Invalid handoff: missing $n"}};foreach($p in @('HandoffPath','StoreRoot','ModelPath','SidecarPath','ArtifactPath','ManifestPath')){ $v=if($p -eq 'HandoffPath'){$HandoffPath}else{$h.$p};if(!(Test-Path -LiteralPath $v)){throw "Invalid handoff accessibility: $p is missing or unreadable ($v)."}};$StoreRoot=$h.StoreRoot;$TaskId=$h.TaskId;$WorkflowId=$h.WorkflowId;$QaWorkflowId=$h.QaWorkflowId;$RunId=$h.RunId;$ModelPath=$h.ModelPath;$SidecarPath=$h.SidecarPath}
+    if([string]::IsNullOrWhiteSpace($HandoffPath) -and [string]::IsNullOrWhiteSpace($StoreRoot)){throw 'StoreRoot is required when HandoffPath is not supplied.'}
+    if($HandoffPath){$h=Get-Content -LiteralPath $HandoffPath -Raw|ConvertFrom-Json;foreach($n in @('StoreRoot','TaskId','WorkflowId','QaWorkflowId','RunId','HandoffId','ModelPath','SidecarPath','ArtifactPath','ArtifactSha256','ManifestPath','ManifestSha256')){if($h.PSObject.Properties.Name -notcontains $n -or [string]::IsNullOrWhiteSpace([string]$h.$n)){throw "Invalid handoff: missing $n"}};if($StoreRoot -and [IO.Path]::GetFullPath($StoreRoot) -ine [IO.Path]::GetFullPath($h.StoreRoot)){throw 'Supplied StoreRoot does not match the durable handoff.'};foreach($p in @('HandoffPath','StoreRoot','ModelPath','SidecarPath','ArtifactPath','ManifestPath')){ $v=if($p -eq 'HandoffPath'){$HandoffPath}else{$h.$p};if(!(Test-Path -LiteralPath $v)){throw "Invalid handoff accessibility: $p is missing or unreadable ($v)."}};$StoreRoot=$h.StoreRoot;$TaskId=$h.TaskId;$WorkflowId=$h.WorkflowId;$QaWorkflowId=$h.QaWorkflowId;$RunId=$h.RunId;$ModelPath=$h.ModelPath;$SidecarPath=$h.SidecarPath}
     foreach ($identity in @($TaskId,$WorkflowId,$QaWorkflowId,$RunId)) {
         if ($identity -notmatch '^[A-Za-z0-9][A-Za-z0-9_-]{0,127}$') { throw 'Invalid Tara workflow identity.' }
     }
