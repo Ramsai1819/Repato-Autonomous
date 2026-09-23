@@ -211,8 +211,10 @@ function Invoke-MayaQaRequest {
         if(@($taskNow.approvalRequests|Where-Object {$_.action -ceq 'qa-run' -and $_.status -ceq 'pending'}).Count -eq 0){
             Update-RepatoTask $StoreRoot $taskId 'in-progress' 'qa' 'Tara' $null $null | Out-Null
             Update-RepatoTask $StoreRoot $taskId 'passed' 'qa' 'Tara' $null $null | Out-Null
-            $approval=Request-RepatoTaskApproval $StoreRoot $taskId 'qa-run' 'maya'
+            $null=Request-RepatoTaskApproval $StoreRoot $taskId 'qa-run' 'maya'
+            $approval=@((Find-RepatoTask (Read-RepatoTaskStore $StoreRoot) $taskId).approvalRequests|Where-Object {$_.action -ceq 'qa-run' -and $_.status -ceq 'pending'})[-1]
         } else {$approval=@($taskNow.approvalRequests|Where-Object {$_.action -ceq 'qa-run' -and $_.status -ceq 'pending'})[-1]}
+        if($null -eq $approval -or [string]::IsNullOrWhiteSpace([string]$approval.requestId)){throw 'Persisted qa-run approval request is missing requestId.'}
         return [pscustomobject]@{Success=$false;Mode='Real';TaskId=$taskId;WorkflowId=$workflowId;QaWorkflowId=$qaId;RunId=$runId;Stage='approval-required';NextOperation='Resolve-RepatoTaskApproval';QaApprovalId=$approval.requestId;QaApprovalStatus=$approval.status;SideEffectsPerformed=$true;Error=$null}
     }
     $handoff=New-MayaQaHandoff -StoreRoot $StoreRoot -TaskId $taskId -WorkflowId $workflowId -QaWorkflowId $qaId

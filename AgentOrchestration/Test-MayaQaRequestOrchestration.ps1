@@ -5,3 +5,5 @@ $failed=$false;try{Invoke-MayaQaRequest -StoreRoot ([IO.Path]::GetTempPath()) -U
 if(!$failed){throw 'Unsupported request was accepted.'};Write-Host 'Maya request orchestration checks passed: 2'
 $normalized='Create Grids'.Trim().ToLowerInvariant();$resolved=Resolve-MayaQaRequestWorkflow 'Create Grids';Write-Host "Real-path diagnostic: normalized='$normalized'; resolver='$resolved'"
 try { Invoke-MayaQaIntake 'task-real-routing' 'workflow-real-routing' $resolved 'Create Grids' | Out-Null } catch { if($_.Exception.Message -match 'does not identify a supported QA workflow'){throw 'Real intake path still rejected Create Grids routing.'} }
+$source=Get-Content -LiteralPath (Join-Path $PSScriptRoot 'Repato.MayaQaWorkflow.psm1') -Raw
+if($source -notmatch 'Persisted qa-run approval request is missing requestId'){throw 'Approval return-shape persistence regression failed.'}
