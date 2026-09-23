@@ -170,6 +170,17 @@ function Invoke-MayaQaIntake {
         SideEffectsPerformed = $true
     }
 }
+function Invoke-MayaQaRequest {
+    param([Parameter(Mandatory)][string]$StoreRoot,[Parameter(Mandatory)][string]$UserRequest,[string]$SourceBranch='main',[string]$ProjectPath,[switch]$DryRun)
+    $text=$UserRequest.ToLowerInvariant();$qaId=if($text -match 'eight grids|create grids|world axis'){'create-grids-world-axis-v1'}elseif($text -match 'create levels'){'create-levels'}elseif($text -match 'bubble visibility'){'grid-bubble-visibility-v1'}elseif($text -match 'bubble offset'){'grid-bubble-offset-v1'}elseif($text -match 'resequence'){'grid-resequence-v1'}else{$null}
+    if(!$qaId){throw 'Unsupported QA request. Specify a supported workflow request.'}
+    $taskId='task-'+[guid]::NewGuid().ToString('N');$workflowId='workflow-'+[guid]::NewGuid().ToString('N');$runId=[guid]::NewGuid().ToString('N')
+    $def=Get-MayaQaWorkflowDefinition $qaId
+    if($DryRun){return [pscustomobject]@{Success=$true;Mode='DryRun';TaskId=$taskId;WorkflowId=$workflowId;QaWorkflowId=$qaId;RunId=$runId;FixtureId=$def.FixtureId;NativeTestId=$def.TestId;Stages=@('intake','build-request','build-execute','handoff','tara-execute','report-verify','complete','receipt','dashboard');SideEffectsPerformed=$false;Error=$null}}
+    if([string]::IsNullOrWhiteSpace($ProjectPath)){throw 'ProjectPath is required for real Maya request orchestration.'}
+    $intake=Invoke-MayaQaIntake $taskId $workflowId $qaId $UserRequest
+    [pscustomobject]@{Success=$false;Mode='Real';TaskId=$taskId;WorkflowId=$workflowId;QaWorkflowId=$qaId;RunId=$runId;Stage='intake-complete';Next='qa-build-request';Intake=$intake;SideEffectsPerformed=$true;Error='Build and Tara execution require explicit lifecycle operations with their persisted paths.'}
+}
 function Invoke-MayaQaBuildExecute {
     param([Parameter(Mandatory)][string]$StoreRoot,[Parameter(Mandatory)][string]$TaskId,[Parameter(Mandatory)][string]$WorkflowId,[Parameter(Mandatory)][string]$QaWorkflowId,[string]$SourceBranch='current',[string]$ProjectPath='Forma.RevitConnector.csproj',[switch]$DryRun)
     if ([string]::IsNullOrWhiteSpace($SourceBranch)) { $SourceBranch = 'current' }
@@ -482,4 +493,4 @@ function Invoke-MayaQaOverview { param([Parameter(Mandatory)][ValidateSet('qa-ca
     [pscustomobject]@{Operation=$Route;TimestampUtc=(Get-Date).ToUniversalTime().ToString('O');WorkflowId=$WorkflowId;QaWorkflowId=$QaWorkflowId;ResultStatus='ok';SideEffectsPerformed=$false;Result=$result}
 }
 . (Join-Path $PSScriptRoot 'MayaQa.TaraExecution.ps1')
-Export-ModuleMember -Function Invoke-MayaQaTaraExecute,Get-MayaQaWorkflowDefinition,Get-MayaQaWorkflowCatalog,Get-MayaQaCatalogDryRun,Get-MayaQaWorkflowStatus,Invoke-MayaQaIntake,New-MayaQaBuildRequest,Invoke-MayaQaBuildExecute,New-MayaQaHandoff,Submit-MayaQaReport,Get-MayaQaDashboard,Invoke-MayaQaOverview,New-MayaQaBootstrap,New-MayaQaRun,Register-MayaQaReport,Complete-MayaQaWorkflow,New-MayaQaReceipt,Get-MayaQaReceiptStatus
+Export-ModuleMember -Function Invoke-MayaQaTaraExecute,Invoke-MayaQaRequest,Get-MayaQaWorkflowDefinition,Get-MayaQaWorkflowCatalog,Get-MayaQaCatalogDryRun,Get-MayaQaWorkflowStatus,Invoke-MayaQaIntake,New-MayaQaBuildRequest,Invoke-MayaQaBuildExecute,New-MayaQaHandoff,Submit-MayaQaReport,Get-MayaQaDashboard,Invoke-MayaQaOverview,New-MayaQaBootstrap,New-MayaQaRun,Register-MayaQaReport,Complete-MayaQaWorkflow,New-MayaQaReceipt,Get-MayaQaReceiptStatus

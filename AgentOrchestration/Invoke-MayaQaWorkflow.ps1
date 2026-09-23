@@ -20,6 +20,7 @@ param(
         'qa-catalog-dry-run',
         'qa-help',
         'qa-capabilities'
+        ,'qa-request-execute'
     )]
     [string]$Operation,
 
@@ -61,6 +62,7 @@ Import-Module (Join-Path $PSScriptRoot 'Repato.MayaQaWorkflow.psm1') -Force -War
 
 try {
     $result = switch ($Operation) {
+        'qa-request-execute' { Invoke-MayaQaRequest -StoreRoot $StoreRoot -UserRequest $UserRequest -SourceBranch $SourceBranch -ProjectPath $ProjectPath -DryRun:$DryRun }
         'qa-tara-execute' {
             Invoke-MayaQaTaraExecute -StoreRoot $StoreRoot -TaskId $TaskId -WorkflowId $WorkflowId `
                 -QaWorkflowId $QaWorkflowId -RunId $RunId -ModelPath $ModelPath -SidecarPath $SidecarPath `
