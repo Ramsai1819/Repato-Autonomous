@@ -1,0 +1,5 @@
+$ErrorActionPreference='Stop';$root=Join-Path ([IO.Path]::GetTempPath()) ('maya-cross-user-'+[guid]::NewGuid().ToString('N'));$handoffs=Join-Path $root 'handoffs';New-Item -ItemType Directory -Path $handoffs -Force|Out-Null
+$files=@{};foreach($n in @('model.rvt','model.rvt.fixture.json','Repato.Revit.dll','Repato.addin')){$p=Join-Path $root $n;Set-Content $p 'shared-test';$files[$n]=$p}
+$h=[ordered]@{StoreRoot=$root;TaskId='task-cross-user';WorkflowId='workflow-cross-user';QaWorkflowId='create-grids-world-axis-v1';RunId='run-cross-user';HandoffId='handoff-cross-user';ModelPath=$files['model.rvt'];SidecarPath=$files['model.rvt.fixture.json'];ArtifactPath=$files['Repato.Revit.dll'];ArtifactSha256=('0'*64);ManifestPath=$files['Repato.addin'];ManifestSha256=('0'*64)};$hp=Join-Path $handoffs 'handoff-cross-user.json';$h|ConvertTo-Json|Set-Content $hp
+foreach($p in @($hp,$root,$h.ModelPath,$h.SidecarPath,$h.ArtifactPath,$h.ManifestPath)){if(!(Test-Path $p)){throw "Cross-user handoff path inaccessible: $p"}}
+Write-Host 'Cross-user handoff accessibility regression passed.'
