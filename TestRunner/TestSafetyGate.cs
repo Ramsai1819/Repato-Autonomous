@@ -13,12 +13,16 @@ internal static class TestSafetyGate
     internal static string ReportsRoot => RepositoryRoot + @"\QA\Reports";
     private static string FixturesRoot => RepositoryRoot + @"\QA\Fixtures";
 
-    internal static void Verify(Document document, TestRunReport report, string? requiredFixtureId = null)
+    internal static void Verify(Document document, TestRunReport report, string? requiredFixtureId = null, bool allowControlledFixtureSource = false)
     {
         if (document.IsFamilyDocument || document.IsLinked || document.IsReadOnly || document.IsModified || document.IsModifiable ||
             document.IsWorkshared || document.IsModelInCloud || document.IsDetached)
             throw new InvalidOperationException("Reject family, linked, read-only, modified, modifiable, workshared, cloud or detached documents.");
-        string path = QAPathPolicy.ValidatePath(document.PathName, RunsRoot, true);
+        string activePath = document.PathName;
+        if (string.IsNullOrWhiteSpace(activePath))
+            throw new InvalidOperationException("The active Revit document has no saved PathName; cannot validate the QA fixture.");
+        report.DocumentPath = activePath;
+        string path = QAPathPolicy.ValidatePath(activePath, allowControlledFixtureSource ? FixturesRoot : RunsRoot, true);
         report.DocumentPath = path;
         using (BasicFileInfo info = BasicFileInfo.Extract(path))
             if (info.IsWorkshared || info.IsCentral || info.IsLocal)
@@ -33,10 +37,21 @@ internal static class TestSafetyGate
             new { GridNames = gridNames.Order(StringComparer.Ordinal).ToArray(), RevitLinkCount = linkCount }
         );
 
-        string sidecarPath = QAPathPolicy.ValidatePath(path + ".fixture.json", RunsRoot, false);
-        using var json = JsonDocument.Parse(File.ReadAllText(sidecarPath));
-        string fixtureId = json.RootElement.GetProperty("fixtureId").GetString() ?? "";
-        string expectedHash = json.RootElement.GetProperty("sourceSha256").GetString() ?? "";
+        string fixtureId;
+        string expectedHash;
+        JsonDocument? json = null;
+        if (allowControlledFixtureSource)
+        {
+            fixtureId = requiredFixtureId ?? "";
+            expectedHash = TestRunReport.Hash(path);
+        }
+        else
+        {
+            string sidecarPath = QAPathPolicy.ValidatePath(path + ".fixture.json", RunsRoot, false);
+            json = JsonDocument.Parse(File.ReadAllText(sidecarPath));
+            fixtureId = json.RootElement.GetProperty("fixtureId").GetString() ?? "";
+            expectedHash = json.RootElement.GetProperty("sourceSha256").GetString() ?? "";
+        }
         if (requiredFixtureId is not null && !string.Equals(fixtureId, requiredFixtureId, StringComparison.Ordinal))
             throw new InvalidOperationException("This test requires fixture " + requiredFixtureId + ".");
         if (!Regex.IsMatch(fixtureId, @"\A[A-Za-z0-9][A-Za-z0-9_-]{0,79}\z") ||
@@ -45,7 +60,7 @@ internal static class TestSafetyGate
         string[]? approvedNames = FixtureContentPolicy.ApprovedNames(fixtureId);
         if (approvedNames is not null)
         {
-            string[] declared = json.RootElement.TryGetProperty("requiredGridNames", out JsonElement names)
+            string[] declared = json is not null && json.RootElement.TryGetProperty("requiredGridNames", out JsonElement names)
                 ? names.EnumerateArray().Select(item => item.GetString() ?? "").ToArray()
                 : [];
             if (!FixtureContentPolicy.SameNames(declared, approvedNames))
@@ -58,6 +73,7 @@ internal static class TestSafetyGate
         report.FixtureId = fixtureId;
         report.FixtureSha256 = expectedHash;
         report.Assert("safety-gate", true, "Controlled local disposable fixture", path);
+        json?.Dispose();
     }
 
 }

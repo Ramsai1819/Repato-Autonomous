@@ -44,7 +44,8 @@ public sealed class WelcomeSmokeTestCommand : IExternalCommand
             AddinIsolationPolicy.RequireAllowed(report);
             if (testId != SupportedTestId) throw new InvalidOperationException("Unknown test ID.");
             Document document = app.ActiveUIDocument?.Document ?? throw new InvalidOperationException("No active disposable document.");
-            TestSafetyGate.Verify(document, report, "CreateLevelsEmpty");
+            report.DocumentPath = document.PathName;
+            TestSafetyGate.Verify(document, report, "CreateLevelsEmpty", allowControlledFixtureSource: true);
             string beforeHash = TestRunReport.Hash(document.PathName);
             string[] beforeElements = Elements(document);
             bool observed = false;
