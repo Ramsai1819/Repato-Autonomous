@@ -238,16 +238,19 @@ function Invoke-MayaQaBuildExecute {
     Push-Location $root
     try { $lines = @(& dotnet build $project -c Release '-p:RevitInstallDir=E:\revit\Revit 2025' 2>&1); $exit = $LASTEXITCODE } finally { Pop-Location }
     $finished = (Get-Date).ToUniversalTime().ToString('O')
-    $warningCount = @($lines | Where-Object { $_ -match '(?i)warning' }).Count
-    $errorCount = @($lines | Where-Object { $_ -match '(?i)error' }).Count
+    # Count compiler/MSBuild diagnostics only. Summary text such as "0 Error(s)" is not an error diagnostic.
+    $warningLines = @($lines | Where-Object { [string]$_ -match '(?i):\s*warning\s+[A-Z]+\d+\b' })
+    $errorLines = @($lines | Where-Object { [string]$_ -match '(?i):\s*error\s+[A-Z]+\d+\b' })
+    $warningCount = $warningLines.Count
+    $errorCount = $errorLines.Count
     $manifestValid=$false
     if(Test-Path -LiteralPath $artifactManifest -PathType Leaf){try{$manifestValid=([xml](Get-Content -LiteralPath $artifactManifest -Raw)).DocumentElement.Name -ceq 'RevitAddIns'}catch{$manifestValid=$false}}
-    if ($exit -ne 0 -or !(Test-Path -LiteralPath $artifact -PathType Leaf) -or !$manifestValid) { $status='failed' } else { $status='succeeded' }
+    if ($exit -ne 0 -or $errorCount -gt 0 -or !(Test-Path -LiteralPath $artifact -PathType Leaf) -or !$manifestValid) { $status='failed' } else { $status='succeeded' }
     $data = Read-RepatoTaskStore $StoreRoot; $task = Find-RepatoTask $data $TaskId
     $mutation = @(Invoke-RepatoWorkflowMutation $StoreRoot $TaskId $WorkflowId $workflow.workflowRevision $task.revision {
         param($current)
         $current | Add-Member -NotePropertyName qaBuildStatus -NotePropertyValue $status -Force
-        $current | Add-Member -NotePropertyName qaBuildEvidence -NotePropertyValue ([pscustomobject]@{BuildRequestId=$current.qaBuildRequest.BuildRequestId;StartedUtc=$started;FinishedUtc=$finished;Command=$command;Configuration='Release';ExitCode=$exit;ArtifactPath=$artifact;ArtifactSha256=$(if(Test-Path $artifact){(Get-FileHash $artifact -Algorithm SHA256).Hash}else{$null});ManifestPath=$artifactManifest;ManifestSha256=$(if(Test-Path $artifactManifest){(Get-FileHash $artifactManifest -Algorithm SHA256).Hash}else{$null});BuildStatus=$status;WarningCount=$warningCount;ErrorCount=$errorCount}) -Force
+        $current | Add-Member -NotePropertyName qaBuildEvidence -NotePropertyValue ([pscustomobject]@{BuildRequestId=$current.qaBuildRequest.BuildRequestId;StartedUtc=$started;FinishedUtc=$finished;Command=$command;Configuration='Release';ExitCode=$exit;ArtifactPath=$artifact;ArtifactSha256=$(if(Test-Path $artifact){(Get-FileHash $artifact -Algorithm SHA256).Hash}else{$null});ManifestPath=$artifactManifest;ManifestSha256=$(if(Test-Path $artifactManifest){(Get-FileHash $artifactManifest -Algorithm SHA256).Hash}else{$null});BuildStatus=$status;WarningCount=$warningCount;ErrorCount=$errorCount;ErrorLines=$errorLines}) -Force
         return $current
     })[-1]
     if ($status -ne 'succeeded') { throw "Release build failed with exit code $exit." }
