@@ -25,25 +25,18 @@ function Invoke-MayaQaIntake {
     param([Parameter(Mandatory)][string]$TaskId,[Parameter(Mandatory)][string]$WorkflowId,[Parameter(Mandatory)][string]$QaWorkflowId,[Parameter(Mandatory)][string]$UserRequest,[switch]$DryRun)
     if ($TaskId -notmatch '^[A-Za-z0-9][A-Za-z0-9_-]{0,127}$') { throw 'Invalid task identity.' }
     if ($WorkflowId -notmatch '^[A-Za-z0-9][A-Za-z0-9_-]{0,127}$') { throw 'Invalid workflow identity.' }
+    $resolved = Resolve-MayaQaRequestWorkflow $UserRequest
+    if($resolved -cne $QaWorkflowId){ throw "User request resolves to '$resolved', not '$QaWorkflowId'." }
     $def = Get-MayaQaWorkflowDefinition $QaWorkflowId
     if ([string]::IsNullOrWhiteSpace($UserRequest)) { throw 'User request is required.' }
-    $candidates = @()
-    foreach ($candidate in Get-MayaQaWorkflowCatalog) {
-        if ($UserRequest -match [regex]::Escape($candidate.WorkflowId)) { $candidates += $candidate; continue }
-        if ($UserRequest -match [regex]::Escape($candidate.TestId)) { $candidates += $candidate; continue }
-        if ($UserRequest -match [regex]::Escape($candidate.FixtureId)) { $candidates += $candidate }
-    }
-    if ($candidates.Count -eq 0) { throw 'User request does not identify a supported QA workflow.' }
-    $unique = @($candidates | Sort-Object WorkflowId -Unique)
-    if ($unique.Count -ne 1 -or $unique[0].WorkflowId -cne $QaWorkflowId) { throw 'User request is ambiguous or does not match QaWorkflowId.' }
     [pscustomobject]@{
         TaskId = $TaskId
         WorkflowId = $WorkflowId
         OriginalUserRequest = $UserRequest
-        QaWorkflowId = $unique[0].WorkflowId
-        FixtureId = $unique[0].FixtureId
-        NativeTestId = $unique[0].TestId
-        PreparationScript = $unique[0].PreparationScript
+        QaWorkflowId = $QaWorkflowId
+        FixtureId = $def.FixtureId
+        NativeTestId = $def.TestId
+        PreparationScript = $def.Prep
         RequiredApprovalStage = 'Maya approval after Tara QA passed'
         NextAllowedOperation = 'qa-run-plan'
         SideEffectsPerformed = $false

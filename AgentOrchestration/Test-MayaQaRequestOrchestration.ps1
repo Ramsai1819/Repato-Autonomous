@@ -3,3 +3,5 @@ $r=Invoke-MayaQaRequest -StoreRoot ([IO.Path]::GetTempPath()) -UserRequest 'Crea
 if(!$r.Success -or $r.QaWorkflowId -cne 'create-grids-world-axis-v1' -or !$r.Stages -or $r.SideEffectsPerformed){throw 'Successful request dry-run contract failed.'}
 $failed=$false;try{Invoke-MayaQaRequest -StoreRoot ([IO.Path]::GetTempPath()) -UserRequest 'Do unsupported QA' -DryRun|Out-Null}catch{$failed=$_.Exception.Message -match 'does not identify a supported QA workflow'}
 if(!$failed){throw 'Unsupported request was accepted.'};Write-Host 'Maya request orchestration checks passed: 2'
+$normalized='Create Grids'.Trim().ToLowerInvariant();$resolved=Resolve-MayaQaRequestWorkflow 'Create Grids';Write-Host "Real-path diagnostic: normalized='$normalized'; resolver='$resolved'"
+try { Invoke-MayaQaIntake 'task-real-routing' 'workflow-real-routing' $resolved 'Create Grids' | Out-Null } catch { if($_.Exception.Message -match 'does not identify a supported QA workflow'){throw 'Real intake path still rejected Create Grids routing.'} }
