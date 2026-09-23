@@ -192,6 +192,8 @@ function Invoke-MayaQaRequest {
     $null=Initialize-RepatoTaskStore $StoreRoot
     $existing=$null; try{$existing=Find-RepatoTask (Read-RepatoTaskStore $StoreRoot) $taskId}catch{}
     if($null -eq $existing){ New-RepatoTask $StoreRoot $taskId 'Maya QA request' $UserRequest 'qa/maya-qa-workflow' 'maya' | Out-Null }
+    $taskNow=Find-RepatoTask (Read-RepatoTaskStore $StoreRoot) $taskId
+    if($taskNow.workflowStage -eq 'queued'){ Claim-RepatoTask $StoreRoot $taskId 'Neil' | Out-Null; Update-RepatoTask $StoreRoot $taskId 'in-progress' 'implementation' 'Neil' $null $null | Out-Null; Update-RepatoTask $StoreRoot $taskId 'in-progress' 'build-checks' 'Neil' $null $null | Out-Null }
     $workflowExisting=$null; try{$workflowExisting=Get-DeployWorkflow $StoreRoot $taskId $workflowId}catch{}
     if($null -eq $workflowExisting){
         $root=[IO.Path]::GetFullPath((Join-Path $PSScriptRoot '..'));$plan=New-DeployPlan $StoreRoot $taskId (Join-Path $root 'bin\Release\net8.0-windows\Repato.Revit.dll') (Join-Path $root 'Repato.addin');
@@ -207,7 +209,8 @@ function Invoke-MayaQaRequest {
     $current=Get-DeployWorkflow $StoreRoot $taskId $workflowId; $taskData=Read-RepatoTaskStore $StoreRoot; $taskNow=Find-RepatoTask $taskData $taskId
     if(@($taskNow.approvalRequests|Where-Object {$_.action -ceq 'qa-run' -and $_.status -ceq 'approved'}).Count -eq 0){
         if(@($taskNow.approvalRequests|Where-Object {$_.action -ceq 'qa-run' -and $_.status -ceq 'pending'}).Count -eq 0){
-            Update-RepatoTask $StoreRoot $taskId 'passed' 'qa' 'Maya' $null $null | Out-Null
+            Update-RepatoTask $StoreRoot $taskId 'in-progress' 'qa' 'Tara' $null $null | Out-Null
+            Update-RepatoTask $StoreRoot $taskId 'passed' 'qa' 'Tara' $null $null | Out-Null
             $approval=Request-RepatoTaskApproval $StoreRoot $taskId 'qa-run' 'maya'
         } else {$approval=@($taskNow.approvalRequests|Where-Object {$_.action -ceq 'qa-run' -and $_.status -ceq 'pending'})[-1]}
         return [pscustomobject]@{Success=$false;Mode='Real';TaskId=$taskId;WorkflowId=$workflowId;QaWorkflowId=$qaId;RunId=$runId;Stage='approval-required';NextOperation='Resolve-RepatoTaskApproval';QaApprovalId=$approval.requestId;QaApprovalStatus=$approval.status;SideEffectsPerformed=$true;Error=$null}
