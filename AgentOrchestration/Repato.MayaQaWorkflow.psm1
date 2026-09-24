@@ -7,8 +7,8 @@ $script:Definitions = @{
     'create-levels-elevations-v1' = @{ FixtureId='CreateLevelsEmpty'; Source='CreateLevelsEmpty.rvt'; Prep='Prepare-CreateLevelsQaRun.ps1'; TestId='create-levels-elevations-v1'; Capabilities=@('prepare-fixture','report-verify','complete') }
     'grid-bubble-visibility-v1' = @{ FixtureId='GridBubbleVisibilityEmpty'; Source='GridBubbleVisibilityEmpty.rvt'; Prep='Prepare-GridBubbleVisibilityQaRun.ps1'; TestId='grid-bubble-visibility-v1'; Capabilities=@('prepare-fixture','report-verify','complete') }
     'grid-bubble-offset-v1' = @{ FixtureId='GridBubbleOffsetEmpty'; Source='GridBubbleOffsetEmpty.rvt'; Prep='Prepare-GridBubbleOffsetQaRun.ps1'; TestId='grid-bubble-offset-v1'; Capabilities=@('prepare-fixture','report-verify','complete') }
-    'grid-resequence-v1' = @{ FixtureId='GridResequenceEmpty'; Source='GridResequenceEmpty.rvt'; Prep='Prepare-GridResequenceQaRun.ps1'; TestId='grid-resequence-all-directions-v1'; Capabilities=@('prepare-fixture','report-verify','complete') }
-    'grid-resequence-all-directions-v1' = @{ FixtureId='GridResequenceEmpty'; Source='GridResequenceEmpty.rvt'; Prep='Prepare-GridResequenceQaRun.ps1'; TestId='grid-resequence-all-directions-v1'; Capabilities=@('prepare-fixture','report-verify','complete') }
+    'grid-resequence-v1' = @{ FixtureId='GridResequenceEmpty'; Source='GridResequenceEmpty.rvt'; Prep='Prepare-GridResequenceQaRun.ps1'; TestId='grid-resequence-v1'; Capabilities=@('prepare-fixture','report-verify','complete') }
+    'grid-resequence-all-directions-v1' = @{ FixtureId='GridResequenceEmpty'; Source='GridResequenceEmpty.rvt'; Prep='Prepare-GridResequenceQaRun.ps1'; TestId='grid-resequence-v1'; Capabilities=@('prepare-fixture','report-verify','complete') }
 }
 function Get-MayaQaWorkflowDefinition { param([Parameter(Mandatory)][string]$WorkflowId)
     if (-not $script:Definitions.ContainsKey($WorkflowId)) { throw "Unsupported QA workflow ID: $WorkflowId" }
@@ -23,10 +23,20 @@ function Get-MayaQaRequestIntent {
     $text = $Request.Trim().ToLowerInvariant()
     $offset = $null
     if ($text -match '(?<value>-?\d+(?:\.\d+)?)\s*mm\b') { $offset = [decimal]$Matches.value }
+    $direction = $null
+    $directionMap = @{
+        'bottom\s+to\s+top' = 'BottomToTop'
+        'top\s+to\s+bottom' = 'TopToBottom'
+        'left\s+to\s+right' = 'LeftToRight'
+        'right\s+to\s+left' = 'RightToLeft'
+    }
+    foreach ($pattern in $directionMap.Keys) { if ($text -match $pattern) { $direction = $directionMap[$pattern]; break } }
     [pscustomobject]@{
         GridSelection = if ($text -match 'selected\s+grids?|selected\s+grid') { 'selected-grids' } else { $null }
         BubbleSides = @(@('left','right','top','bottom') | Where-Object { $text -match "\b$_\b" })
         OffsetMillimetres = $offset
+        ResequenceDirection = $direction
+        CustomNamingIntent = if ($text -match 'custom\s+naming|name|naming|label|prefix|number') { $Request } else { $null }
     }
 }
 function Get-MayaQaWorkflowCatalog {
@@ -198,14 +208,17 @@ function Resolve-MayaQaRequestWorkflow {
         'create-levels-elevations-v1'='create-levels-elevations-v1';'create-levels'='create-levels-elevations-v1';'create levels'='create-levels-elevations-v1';
         'grid-bubble-visibility-v1'='grid-bubble-visibility-v1';'grid bubble visibility'='grid-bubble-visibility-v1';
         'grid-bubble-offset-v1'='grid-bubble-offset-v1';'grid bubble offset'='grid-bubble-offset-v1';
-        'grid-resequence-v1'='grid-resequence-all-directions-v1';'grid-resequence-all-directions-v1'='grid-resequence-all-directions-v1';'grid resequence'='grid-resequence-all-directions-v1'
+        'grid-resequence-v1'='grid-resequence-v1';'grid-resequence-all-directions-v1'='grid-resequence-v1';'grid resequence'='grid-resequence-v1'
     }
     if($map.ContainsKey($text)){return $map[$text]}
     if($text -match 'eight grids|create grids|world axis'){return 'create-grids-world-axis-v1'}
     if($text -match 'create[- ]levels' -or $text -match 'create\s+(?:one|two|three|four|five|six|seven|eight|nine|ten|\d+)\s+levels'){return 'create-levels-elevations-v1'}
     if($text -match 'bubble visibility' -or ($text -match '(show|display|hide|turn)\b' -and $text -match 'bubbles?' -and $text -match 'selected\s+grids?')){return 'grid-bubble-visibility-v1'}
     if($text -match 'bubble offset' -or ($text -match '(offset|move|shift)' -and $text -match 'bubbles?' -and $text -match '\b(?:-?\d+(?:\.\d+)?)\s*mm\b')){return 'grid-bubble-offset-v1'}
-    if($text -match 'resequence'){return 'grid-resequence-v1'}
+    if($text -match 'resequence'){
+        if($text -notmatch '\bgrids?\b'){throw 'User request does not identify a supported QA workflow.'}
+        return 'grid-resequence-v1'
+    }
     throw 'User request does not identify a supported QA workflow.'
 }
 function Invoke-MayaQaRequest {
