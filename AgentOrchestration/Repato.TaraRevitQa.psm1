@@ -65,7 +65,7 @@ function New-TaraRevitQaPlan {
           'create-grids-world-axis-v1'=@('Repato.CreateGrids.TestRunner.addin','REPATO_QA_CREATE_GRIDS_REQUEST','Invoke-CreateGridsQA.ps1','Repato.Revit.TestRunner.CreateGridsQaApplication')
     }
       $runners['create-levels-elevations-v1']=$runners['create-levels']
-    if(!$runners.ContainsKey($QaWorkflowId)){throw "Workflow has no supported unattended startup runner. Normalized ID='$QaWorkflowId'; available runner keys=$($runners.Keys -join ', ')."}
+    if(!$runners.ContainsKey($QaWorkflowId)){throw 'Workflow has no supported unattended startup runner (Welcome requires supervision; Create Grids has no startup application).'}
     foreach($name in @('TaskId','WorkflowId','QaWorkflowId','RunId')){ $value=Get-Variable $name -ValueOnly;if($value -notmatch '^[A-Za-z0-9][A-Za-z0-9_-]{0,127}$' -or $Context.$name -cne $value){throw "Wrong workflow identity: $name"} }
     $roots=Get-TaraRuntimeRoots
     if([IO.Path]::GetFullPath($Context.QaRoot) -ine $roots.QaRoot){throw 'Native runner requires the fixed Source QA root.'}
