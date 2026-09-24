@@ -51,6 +51,7 @@ function Assert-TaraRevitExecutableVersion([string]$Path){
 }
 function New-TaraRevitQaPlan {
     param([string]$StoreRoot,[string]$TaskId,[string]$WorkflowId,[string]$QaWorkflowId,[string]$RunId,[string]$ModelPath,[string]$SidecarPath,[string]$ReportDirectory,[string]$RevitInstallDir,[string]$QaAddinRoot,[ValidateRange(1,3600)][int]$TimeoutSeconds=900,[switch]$DryRun,[Parameter(Mandatory)]$Context)
+    $QaWorkflowId=$QaWorkflowId.Trim()
     $runners=@{
         'create-levels'=@('Repato.CreateLevels.TestRunner.addin','REPATO_QA_LEVELS_REQUEST','Invoke-CreateLevelsQA.ps1','Repato.Revit.TestRunner.CreateLevelsQaApplication')
         'grid-bubble-visibility-v1'=@('Repato.GridBubbleVisibility.TestRunner.addin','REPATO_QA_GRID_BUBBLE_REQUEST','Invoke-GridBubbleVisibilityQA.ps1','Repato.Revit.TestRunner.GridBubbleVisibilityQaApplication')
@@ -59,7 +60,7 @@ function New-TaraRevitQaPlan {
           'create-grids-world-axis-v1'=@('Repato.CreateGrids.TestRunner.addin','REPATO_QA_CREATE_GRIDS_REQUEST','Invoke-CreateGridsQA.ps1','Repato.Revit.TestRunner.CreateGridsQaApplication')
     }
       $runners['create-levels-elevations-v1']=$runners['create-levels']
-    if(!$runners.ContainsKey($QaWorkflowId)){throw 'Workflow has no supported unattended startup runner (Welcome requires supervision; Create Grids has no startup application).'}
+    if(!$runners.ContainsKey($QaWorkflowId)){throw "Workflow has no supported unattended startup runner. Normalized ID='$QaWorkflowId'; available runner keys=$($runners.Keys -join ', ')."}
     foreach($name in @('TaskId','WorkflowId','QaWorkflowId','RunId')){ $value=Get-Variable $name -ValueOnly;if($value -notmatch '^[A-Za-z0-9][A-Za-z0-9_-]{0,127}$' -or $Context.$name -cne $value){throw "Wrong workflow identity: $name"} }
     $roots=Get-TaraRuntimeRoots
     if([IO.Path]::GetFullPath($Context.QaRoot) -ine $roots.QaRoot){throw 'Native runner requires the fixed Source QA root.'}
