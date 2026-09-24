@@ -52,7 +52,9 @@ function Assert-TaraRevitExecutableVersion([string]$Path){
 function Get-TaraQaTrustConfiguration($QaAddinRoot,$QaRoot,$Inventory){
     $names=@('Repato.CreateLevels.TestRunner.addin','Repato.CreateGrids.TestRunner.addin','Repato.GridBubbleVisibility.TestRunner.addin','Repato.GridBubbleOffset.TestRunner.addin','Repato.GridResequence.TestRunner.addin')
     $records=@();foreach($n in $names){$p=Join-Path (Split-Path $QaAddinRoot -Parent) $n;$source=Join-Path $QaRoot $n;if(!(Test-Path $source -PathType Leaf)){continue};$h=Get-TaraSha256 $source;$records+=[pscustomobject]@{Name=$n;Path=$p;Sha256=$h}}
-    [pscustomobject]@{Path=(Join-Path $QaAddinRoot 'RepatoQA.trust.json');ApprovedManifests=$records;PromptFree=$true;ProfileRoot=$QaAddinRoot}
+    $installed=@(Get-ChildItem -LiteralPath (Split-Path $QaAddinRoot -Parent) -Filter '*.addin' -File -ErrorAction Stop)
+    $promptRecords=@();foreach($file in $installed){$match=$records|Where-Object Name -ceq $file.Name;if($null -eq $match){throw "Unexpected RepatoQA manifest installed: $($file.Name)"};$promptRecords+=[pscustomobject]@{ManifestName=$file.Name;DllPath=(Join-Path $QaAddinRoot 'Repato.Revit.dll');Approved=$true;PromptDetected=$false;PromptAction='Preauthorized';Timestamp=(Get-Date).ToUniversalTime().ToString('O')}}
+    [pscustomobject]@{Path=(Join-Path $QaAddinRoot 'RepatoQA.trust.json');ApprovedManifests=$records;PromptRecords=$promptRecords;PromptFree=($installed.Count -le 1);ProfileRoot=$QaAddinRoot;Diagnostic=$(if($installed.Count -gt 1){'Multiple approved QA manifests may trigger sequential Revit trust prompts; interactive prompt automation is required before launch.'}else{'No competing QA manifests detected.'})}
 }
 function New-TaraRevitQaPlan {
     param([string]$StoreRoot,[string]$TaskId,[string]$WorkflowId,[string]$QaWorkflowId,[string]$RunId,[string]$ModelPath,[string]$SidecarPath,[string]$ReportDirectory,[string]$RevitInstallDir,[string]$QaAddinRoot,[ValidateRange(1,3600)][int]$TimeoutSeconds=900,[switch]$DryRun,[Parameter(Mandatory)]$Context)
@@ -122,7 +124,8 @@ function Start-TaraProcess($Plan){
 function Handle-TaraTrustPrompt($Plan,$Process){
     # Revit trust is pre-authorized only through the validated RepatoQA trust file.
     # An unexpected prompt is never dismissed or approved automatically.
-    [pscustomobject]@{PromptDetected=$false;PromptAction='None';ApprovedManifest=$null;PromptFree=[bool]$Plan.TrustConfiguration.PromptFree}
+    if(!$Plan.TrustConfiguration.PromptFree){throw $Plan.TrustConfiguration.Diagnostic}
+    [pscustomobject]@{PromptDetected=$false;PromptAction='None';ApprovedManifest=$null;PromptRecords=@($Plan.TrustConfiguration.PromptRecords);PromptFree=$true}
 }
 function Stop-TaraOwnedProcess($Process){
     # Never discover/reacquire by PID or name. The original Process handle owns this termination.
