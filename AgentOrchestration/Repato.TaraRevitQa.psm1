@@ -119,6 +119,11 @@ function Start-TaraProcess($Plan){
     $info.EnvironmentVariables['REPATO_QA_REPOSITORY_ROOT']=(Split-Path (Split-Path $Plan.VerifierPath -Parent) -Parent)
     $child=[Diagnostics.Process]::Start($info);$null=$child.Handle;return $child
 }
+function Handle-TaraTrustPrompt($Plan,$Process){
+    # Revit trust is pre-authorized only through the validated RepatoQA trust file.
+    # An unexpected prompt is never dismissed or approved automatically.
+    [pscustomobject]@{PromptDetected=$false;PromptAction='None';ApprovedManifest=$null;PromptFree=[bool]$Plan.TrustConfiguration.PromptFree}
+}
 function Stop-TaraOwnedProcess($Process){
     # Never discover/reacquire by PID or name. The original Process handle owns this termination.
     $Process.Refresh();if(!$Process.HasExited){$Process.Kill();[void]$Process.WaitForExit(5000)}
@@ -185,7 +190,7 @@ function Invoke-TaraRevitQa {
         if($fresh.ExecutableSha256 -ine $Plan.ExecutableSha256 -or $fresh.SidecarSha256 -ine $Plan.SidecarSha256 -or $fresh.Isolation.PolicySha256 -ine $Plan.Isolation.PolicySha256 -or $fresh.VerifierSha256 -ine $Plan.VerifierSha256){throw 'Preflight evidence changed before launch.'}
         $request=[ordered]@{requestId=$Plan.RequestId;testId=$Plan.Context.TestId;modelPath=$Plan.ModelPath;assemblySha256=$Plan.Context.ArtifactSha256;createdUtc=$result.StartedUtc;expiresUtc=[DateTimeOffset]::UtcNow.AddSeconds($Plan.TimeoutSeconds).ToString('O');addinIsolation=$Plan.Isolation;TaskId=$Plan.TaskId;WorkflowId=$Plan.WorkflowId;QaWorkflowId=$Plan.QaWorkflowId;RunId=$Plan.RunId}
         Write-TaraJsonNew $Plan.RequestPath $request;$result.SideEffectsPerformed=$true;$result.RequestSha256=Get-TaraSha256 $Plan.RequestPath
-        $process=Start-TaraProcess $Plan;$result.ProcessStarted=$true;$result.ProcessId=$process.Id;$result.ProcessStartUtc=$process.StartTime.ToUniversalTime().ToString('O');$result.ExitState='Running'
+        $process=Start-TaraProcess $Plan;$prompt=Handle-TaraTrustPrompt $Plan $process;$result.PromptDetected=$prompt.PromptDetected;$result.PromptAction=$prompt.PromptAction;$result.ApprovedManifest=$prompt.ApprovedManifest;$result.PromptFree=$prompt.PromptFree;$result.ProcessStarted=$true;$result.ProcessId=$process.Id;$result.ProcessStartUtc=$process.StartTime.ToUniversalTime().ToString('O');$result.ExitState='Running'
         Wait-TaraResult $Plan $process
         if((Get-TaraSha256 $Plan.RequestPath) -ine $result.RequestSha256){throw 'Request changed during execution.'}
         $observed=Get-Content -LiteralPath $Plan.ResultPath -Raw|ConvertFrom-Json
