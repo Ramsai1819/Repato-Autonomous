@@ -5,6 +5,6 @@ $payload=[pscustomobject]@{Action=$Action;Artifact=$dll;Manifest=$manifest;Targe
 if($Action -eq 'DryRun'){ $payload|ConvertTo-Json -Depth 5;return }
 if($Action -eq 'Uninstall'){if($PSCmdlet.ShouldProcess($target,'Remove Repato v1')){if(Test-Path $targetManifest){Remove-Item $targetManifest -Force};if(Test-Path $target){Remove-Item $target -Recurse -Force}};return}
 $backup=Join-Path $addins ('Repato.backup-'+(Get-Date -Format 'yyyyMMdd-HHmmss'))
-if(Test-Path $target -or Test-Path $targetManifest){New-Item $backup -ItemType Directory -Force|Out-Null;if(Test-Path $target){Copy-Item $target (Join-Path $backup 'Repato') -Recurse};if(Test-Path $targetManifest){Copy-Item $targetManifest (Join-Path $backup 'Repato.addin')}}
+if((Test-Path $target) -or (Test-Path $targetManifest)){New-Item $backup -ItemType Directory -Force|Out-Null;if(Test-Path $target){Copy-Item $target (Join-Path $backup 'Repato') -Recurse};if(Test-Path $targetManifest){Copy-Item $targetManifest (Join-Path $backup 'Repato.addin')}}
 if($PSCmdlet.ShouldProcess($target,'Install Repato v1')){New-Item $target -ItemType Directory -Force|Out-Null;Copy-Item $dll $targetDll -Force;Copy-Item $manifest $targetManifest -Force}
 [pscustomobject]@{Action='Install';TargetDll=$targetDll;TargetManifest=$targetManifest;Backup=$backup;SideEffectsPerformed=$true}
