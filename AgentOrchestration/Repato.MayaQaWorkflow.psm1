@@ -18,6 +18,17 @@ function Resolve-MayaQaWorkflowId {
     param([Parameter(Mandatory)][string]$WorkflowId)
     return [string](Get-MayaQaWorkflowDefinition $WorkflowId).TestId
 }
+function Get-MayaQaRequestIntent {
+    param([Parameter(Mandatory)][string]$Request)
+    $text = $Request.Trim().ToLowerInvariant()
+    $offset = $null
+    if ($text -match '(?<value>-?\d+(?:\.\d+)?)\s*mm\b') { $offset = [decimal]$Matches.value }
+    [pscustomobject]@{
+        GridSelection = if ($text -match 'selected\s+grids?|selected\s+grid') { 'selected-grids' } else { $null }
+        BubbleSides = @(@('left','right','top','bottom') | Where-Object { $text -match "\b$_\b" })
+        OffsetMillimetres = $offset
+    }
+}
 function Get-MayaQaWorkflowCatalog {
     @($script:Definitions.GetEnumerator() | Sort-Object Name | ForEach-Object {
         [pscustomobject]@{WorkflowId=$_.Key;FixtureId=$_.Value.FixtureId;TestId=$_.Value.TestId;PreparationScript=$_.Value.Prep;Capabilities=@($_.Value.Capabilities);SupervisedExecutionRequired=$true;RevitLaunchByCoordinator=$false;RealDeploymentByCoordinator=$false;DryRunSupported=$true}
@@ -36,11 +47,13 @@ function Invoke-MayaQaIntake {
     if($resolved -cne $canonical){ throw "User request resolves to '$resolved', not '$canonical'." }
     $QaWorkflowId = $canonical
     $def = Get-MayaQaWorkflowDefinition $QaWorkflowId
+    $intent = Get-MayaQaRequestIntent $UserRequest
     if ([string]::IsNullOrWhiteSpace($UserRequest)) { throw 'User request is required.' }
     [pscustomobject]@{
         TaskId = $TaskId
         WorkflowId = $WorkflowId
         OriginalUserRequest = $UserRequest
+        RequestIntent = $intent
         QaWorkflowId = $QaWorkflowId
         FixtureId = $def.FixtureId
         NativeTestId = $def.TestId
@@ -92,6 +105,7 @@ function Invoke-MayaQaIntake {
         $UserRequest `
         -DryRun:$true
     $QaWorkflowId = Resolve-MayaQaWorkflowId $QaWorkflowId
+    $requestIntent = Get-MayaQaRequestIntent $UserRequest
 
     $requestId = 'build-' + [guid]::NewGuid().ToString('N')
     $requestedArtifact = 'bin\Release\net8.0-windows\Repato.Revit.dll'
@@ -155,6 +169,7 @@ function Invoke-MayaQaIntake {
                 RequestedUtc = (Get-Date).ToUniversalTime().ToString('O')
             }) `
             -Force
+        $current | Add-Member -NotePropertyName qaRequestIntent -NotePropertyValue $requestIntent -Force
 
         return $current
     })[-1]
@@ -188,8 +203,8 @@ function Resolve-MayaQaRequestWorkflow {
     if($map.ContainsKey($text)){return $map[$text]}
     if($text -match 'eight grids|create grids|world axis'){return 'create-grids-world-axis-v1'}
     if($text -match 'create[- ]levels' -or $text -match 'create\s+(?:one|two|three|four|five|six|seven|eight|nine|ten|\d+)\s+levels'){return 'create-levels-elevations-v1'}
-    if($text -match 'bubble visibility'){return 'grid-bubble-visibility-v1'}
-    if($text -match 'bubble offset'){return 'grid-bubble-offset-v1'}
+    if($text -match 'bubble visibility' -or ($text -match '(show|display|hide|turn)\b' -and $text -match 'bubbles?' -and $text -match 'selected\s+grids?')){return 'grid-bubble-visibility-v1'}
+    if($text -match 'bubble offset' -or ($text -match '(offset|move|shift)' -and $text -match 'bubbles?' -and $text -match '\b(?:-?\d+(?:\.\d+)?)\s*mm\b')){return 'grid-bubble-offset-v1'}
     if($text -match 'resequence'){return 'grid-resequence-v1'}
     throw 'User request does not identify a supported QA workflow.'
 }
@@ -359,6 +374,7 @@ function New-MayaQaHandoff {
             HandoffStatus = 'ready'
             QaApprovalId = $approvedApproval.requestId
             QaApprovalStatus = 'approved'
+            RequestIntent = $(if($current.PSObject.Properties.Name -contains 'qaRequestIntent'){$current.qaRequestIntent}else{$null})
             CreatedUtc = (Get-Date).ToUniversalTime().ToString('O')
         }
         $current | Add-Member -NotePropertyName qaHandoffId -NotePropertyValue $handoffId -Force
@@ -389,6 +405,7 @@ function New-MayaQaHandoff {
         HandoffPath = $handoffPath
         QaApprovalId = $approvedApproval.requestId
         QaApprovalStatus = 'approved'
+        RequestIntent = $(if($properties -contains 'qaRequestIntent'){$workflow.qaRequestIntent}else{$null})
         WorkflowRevision = $mutation.Workflow.workflowRevision
         TaskRevision = $mutation.TaskRevision
         SideEffectsPerformed = $true
@@ -452,7 +469,7 @@ function Register-MayaQaReport { param([Parameter(Mandatory)][string]$StoreRoot,
     if([string]::IsNullOrWhiteSpace([string]$j.FinishedUtc)){throw 'QA report timestamp is missing.'};try { if(([DateTimeOffset]::Parse($j.FinishedUtc)) -lt ([DateTimeOffset]::Parse($w.startedUtc))){throw 'QA report is stale.'} } catch { if($_.Exception.Message -eq 'QA report is stale.'){throw}; throw 'QA report timestamp is invalid.' }
     $side=Get-Content -LiteralPath $w.qaSidecarPath -Raw|ConvertFrom-Json; if($side.sourceSha256 -ine $w.qaFixtureSha256){throw 'Fixture sidecar hash mismatch.'}
     $rh=(Get-FileHash -LiteralPath $report -Algorithm SHA256).Hash; $d=Read-RepatoTaskStore $StoreRoot;$t=Find-RepatoTask $d $TaskId
-    $m=@(Invoke-RepatoWorkflowMutation $StoreRoot $TaskId $WorkflowId $w.workflowRevision $t.revision {param($x)$e=[pscustomobject]@{CoordinatorRunId=$x.qaRunId;NativeRunId=$j.RunId;TestId=$j.TestId;Status=$j.Status;RollbackStatus=$j.RollbackStatus;Assertions=@($j.Assertions).Count;DocumentPath=[IO.Path]::GetFullPath($j.DocumentPath);FixtureId=$j.FixtureId;FixtureSha256=$j.FixtureSha256;VerifiedUtc=(Get-Date).ToUniversalTime().ToString('O')};$x|Add-Member -NotePropertyName qaReportPath -NotePropertyValue $report -Force;$x|Add-Member -NotePropertyName qaReportSha256 -NotePropertyValue $rh -Force;$x|Add-Member -NotePropertyName qaEvidence -NotePropertyValue $e -Force;$x|Add-Member -NotePropertyName qaVerificationStatus -NotePropertyValue 'verified' -Force;return $x})[-1]
+    $m=@(Invoke-RepatoWorkflowMutation $StoreRoot $TaskId $WorkflowId $w.workflowRevision $t.revision {param($x)$e=[pscustomobject]@{CoordinatorRunId=$x.qaRunId;NativeRunId=$j.RunId;TestId=$j.TestId;Status=$j.Status;RollbackStatus=$j.RollbackStatus;Assertions=@($j.Assertions).Count;DocumentPath=[IO.Path]::GetFullPath($j.DocumentPath);FixtureId=$j.FixtureId;FixtureSha256=$j.FixtureSha256;RequestIntent=$(if($x.PSObject.Properties.Name -contains 'qaRequestIntent'){$x.qaRequestIntent}else{$null});VerifiedUtc=(Get-Date).ToUniversalTime().ToString('O')};$x|Add-Member -NotePropertyName qaReportPath -NotePropertyValue $report -Force;$x|Add-Member -NotePropertyName qaReportSha256 -NotePropertyValue $rh -Force;$x|Add-Member -NotePropertyName qaEvidence -NotePropertyValue $e -Force;$x|Add-Member -NotePropertyName qaVerificationStatus -NotePropertyValue 'verified' -Force;return $x})[-1]
     [pscustomobject]@{WorkflowId=$WorkflowId;QaWorkflowId=$QaWorkflowId;ReportPath=$report;ReportSha256=$rh;Valid=$true;WorkflowRevision=$m.Workflow.workflowRevision;TaskRevision=$m.TaskRevision;SideEffectsPerformed=$true}
 }
 function Submit-MayaQaReport {
@@ -521,8 +538,7 @@ function New-MayaQaReceipt { param([Parameter(Mandatory)][string]$StoreRoot,[Par
     $build=$w.qaBuildEvidence;$tara=if($w.PSObject.Properties.Name -contains 'qaTaraExecutionEvidence'){$w.qaTaraExecutionEvidence}else{[pscustomobject]@{QaRunnerManifestPath=$null;QaRunnerManifestSha256=$null}};$artifactPath=$build.ArtifactPath;$artifactHash=$build.ArtifactSha256;$artifactManifestPath=$build.ManifestPath;$artifactManifestHash=$build.ManifestSha256;$runnerPath=$tara.QaRunnerManifestPath;$runnerHash=$tara.QaRunnerManifestSha256
     $evidencePairs=@(@($artifactPath,$artifactHash),@($artifactManifestPath,$artifactManifestHash),@($w.qaModelPath,$w.qaFixtureSha256),@($w.qaReportPath,$w.qaReportSha256));if($runnerPath){$evidencePairs+=,@($runnerPath,$runnerHash)}
     foreach($pair in $evidencePairs){if(!(Test-Path -LiteralPath $pair[0] -PathType Leaf)){throw "Evidence file is missing: $($pair[0])"};if((Get-FileHash -LiteralPath $pair[0] -Algorithm SHA256).Hash -ine $pair[1]){throw "Evidence hash mismatch: $($pair[0])"}}
-    $reports=Join-Path (Get-MayaQaRoot) 'Reports';$receiptPath=Join-Path $reports ('maya-qa-receipt-'+$w.qaRunId+'.json');$base=[ordered]@{SchemaVersion='1';TaskId=$TaskId;DeploymentWorkflowId=$WorkflowId;QaWorkflowId=$qaId;QaApprovalId=$(if($w.PSObject.Properties.Name -contains 'qaApprovalId'){$w.qaApprovalId}else{$null});QaApprovalStatus=$(if($w.PSObject.Properties.Name -contains 'qaApprovalStatus'){$w.qaApprovalStatus}else{$null});CoordinatorRunId=$w.qaEvidence.CoordinatorRunId;NativeRunId=$w.qaEvidence.NativeRunId;ArtifactPath=$build.ArtifactPath;ArtifactSha256=$build.ArtifactSha256;ArtifactManifestPath=$artifactManifestPath;ArtifactManifestSha256=$artifactManifestHash;QaRunnerManifestPath=$runnerPath;QaRunnerManifestSha256=$runnerHash;ManifestPath=$build.ManifestPath;ManifestSha256=$build.ManifestSha256;QaModelPath=$w.qaModelPath;FixtureSha256=$w.qaFixtureSha256;QaReportPath=$w.qaReportPath;QaReportSha256=$w.qaReportSha256;ReportStatus=$w.qaEvidence.Status;AssertionCount=$w.qaEvidence.Assertions;RollbackStatus=$w.qaEvidence.RollbackStatus;QaVerificationStatus=$w.qaVerificationStatus;QaCompletionStatus=$w.qaCompletionStatus;CompletionTimestamp=$w.qaCompletedUtc};$json=$base|ConvertTo-Json -Compress -Depth 12;$h=[Security.Cryptography.SHA256]::Create();try{$final=([BitConverter]::ToString($h.ComputeHash([Text.Encoding]::UTF8.GetBytes($json)))).Replace('-','')}finally{$h.Dispose()};$receipt=[ordered]@{};$base.GetEnumerator()|ForEach-Object{$receipt[$_.Key]=$_.Value};$receipt.FinalReceiptSha256=$final;$serialized=$receipt|ConvertTo-Json -Compress -Depth 12
-    $json=$base|ConvertTo-Json -Compress -Depth 12;$h=[Security.Cryptography.SHA256]::Create();try{$final=([BitConverter]::ToString($h.ComputeHash([Text.Encoding]::UTF8.GetBytes($json)))).Replace('-','')}finally{$h.Dispose()};$receipt=[ordered]@{};$base.GetEnumerator()|ForEach-Object{$receipt[$_.Key]=$_.Value};$receipt.FinalReceiptSha256=$final;$serialized=$receipt|ConvertTo-Json -Compress -Depth 12
+    $reports=Join-Path (Get-MayaQaRoot) 'Reports';$receiptPath=Join-Path $reports ('maya-qa-receipt-'+$w.qaRunId+'.json');$base=[ordered]@{SchemaVersion='1';TaskId=$TaskId;DeploymentWorkflowId=$WorkflowId;QaWorkflowId=$qaId;QaApprovalId=$(if($w.PSObject.Properties.Name -contains 'qaApprovalId'){$w.qaApprovalId}else{$null});QaApprovalStatus=$(if($w.PSObject.Properties.Name -contains 'qaApprovalStatus'){$w.qaApprovalStatus}else{$null});CoordinatorRunId=$w.qaEvidence.CoordinatorRunId;NativeRunId=$w.qaEvidence.NativeRunId;ArtifactPath=$build.ArtifactPath;ArtifactSha256=$build.ArtifactSha256;ArtifactManifestPath=$artifactManifestPath;ArtifactManifestSha256=$artifactManifestHash;QaRunnerManifestPath=$runnerPath;QaRunnerManifestSha256=$runnerHash;ManifestPath=$build.ManifestPath;ManifestSha256=$build.ManifestSha256;QaModelPath=$w.qaModelPath;FixtureSha256=$w.qaFixtureSha256;QaReportPath=$w.qaReportPath;QaReportSha256=$w.qaReportSha256;ReportStatus=$w.qaEvidence.Status;AssertionCount=$w.qaEvidence.Assertions;RollbackStatus=$w.qaEvidence.RollbackStatus;QaVerificationStatus=$w.qaVerificationStatus;QaCompletionStatus=$w.qaCompletionStatus;CompletionTimestamp=$w.qaCompletedUtc;RequestIntent=$(if($w.PSObject.Properties.Name -contains 'qaRequestIntent'){$w.qaRequestIntent}else{$null})};$json=$base|ConvertTo-Json -Compress -Depth 12;$h=[Security.Cryptography.SHA256]::Create();try{$final=([BitConverter]::ToString($h.ComputeHash([Text.Encoding]::UTF8.GetBytes($json)))).Replace('-','')}finally{$h.Dispose()};$receipt=[ordered]@{};$base.GetEnumerator()|ForEach-Object{$receipt[$_.Key]=$_.Value};$receipt.FinalReceiptSha256=$final;$serialized=$receipt|ConvertTo-Json -Compress -Depth 12
     if(Test-Path -LiteralPath $receiptPath){$existing=(Get-Content -LiteralPath $receiptPath -Raw).Trim();if($existing -ne $serialized){throw 'Receipt already exists with different evidence.'};return [pscustomobject]@{ReceiptPath=$receiptPath;FinalReceiptSha256=$final;Duplicate=$true;SideEffectsPerformed=$false}}
     $serialized|Set-Content -LiteralPath $receiptPath -Encoding UTF8;$d=Read-RepatoTaskStore $StoreRoot;$t=Find-RepatoTask $d $TaskId;$m=@(Invoke-RepatoWorkflowMutation $StoreRoot $TaskId $WorkflowId $w.workflowRevision $t.revision {param($x)$x|Add-Member -NotePropertyName qaReceiptPath -NotePropertyValue $receiptPath -Force;$x|Add-Member -NotePropertyName qaReceiptSha256 -NotePropertyValue $final -Force;return $x})[-1]
     [pscustomobject]@{ReceiptPath=$receiptPath;FinalReceiptSha256=$final;Duplicate=$false;WorkflowRevision=$m.Workflow.workflowRevision;TaskRevision=$m.TaskRevision;SideEffectsPerformed=$true}
@@ -546,7 +562,7 @@ function Get-MayaQaBuildEvidenceStatus {
     if($receipt.TaskId -cne $TaskId -or $receipt.DeploymentWorkflowId -cne $WorkflowId -or $receipt.QaWorkflowId -cne $QaWorkflowId){throw 'QA receipt identity mismatch.'}
     $stored=$receipt.FinalReceiptSha256;$copy=[ordered]@{};$receipt.PSObject.Properties|Where-Object Name -ne 'FinalReceiptSha256'|ForEach-Object{$copy[$_.Name]=$_.Value};$json=$copy|ConvertTo-Json -Compress -Depth 12;$h=[Security.Cryptography.SHA256]::Create();try{$computed=([BitConverter]::ToString($h.ComputeHash([Text.Encoding]::UTF8.GetBytes($json)))).Replace('-','')}finally{$h.Dispose()};if($computed -ine $stored -or ($w.PSObject.Properties.Name -contains 'qaReceiptSha256' -and $w.qaReceiptSha256 -ine $stored)){throw 'QA receipt hash mismatch.'}
     $checks=@();foreach($pair in @(@('Artifact',$receipt.ArtifactPath,$receipt.ArtifactSha256),@('Manifest',$receipt.ManifestPath,$receipt.ManifestSha256),@('Model',$receipt.QaModelPath,$receipt.FixtureSha256),@('Report',$receipt.QaReportPath,$receipt.QaReportSha256))){$ok=Test-Path -LiteralPath $pair[1] -PathType Leaf;if($ok){$ok=(Get-FileHash -LiteralPath $pair[1] -Algorithm SHA256).Hash -ieq $pair[2]};$checks+=[pscustomobject]@{Name=$pair[0];Path=$pair[1];ExpectedSha256=$pair[2];Valid=$ok};if(!$ok){throw "$($pair[0]) hash verification failed."}}
-    [pscustomobject]@{ReceiptStatus='Valid';TaskId=$receipt.TaskId;WorkflowId=$receipt.DeploymentWorkflowId;QaWorkflowId=$receipt.QaWorkflowId;CoordinatorRunId=$receipt.CoordinatorRunId;NativeRunId=$receipt.NativeRunId;ReportStatus=$receipt.ReportStatus;RollbackStatus=$receipt.RollbackStatus;QaVerificationStatus=$receipt.QaVerificationStatus;QaCompletionStatus=$receipt.QaCompletionStatus;CompletionTimestamp=$receipt.CompletionTimestamp;ReceiptSha256=$stored;ReceiptHashValid=$true;ReferencedHashes=$checks;SideEffectsPerformed=$false}
+    [pscustomobject]@{ReceiptStatus='Valid';TaskId=$receipt.TaskId;WorkflowId=$receipt.DeploymentWorkflowId;QaWorkflowId=$receipt.QaWorkflowId;RequestIntent=$receipt.RequestIntent;CoordinatorRunId=$receipt.CoordinatorRunId;NativeRunId=$receipt.NativeRunId;ReportStatus=$receipt.ReportStatus;RollbackStatus=$receipt.RollbackStatus;QaVerificationStatus=$receipt.QaVerificationStatus;QaCompletionStatus=$receipt.QaCompletionStatus;CompletionTimestamp=$receipt.CompletionTimestamp;ReceiptSha256=$stored;ReceiptHashValid=$true;ReferencedHashes=$checks;SideEffectsPerformed=$false}
 }
 function Get-MayaQaDashboard { param([Parameter(Mandatory)][string]$StoreRoot,[Parameter(Mandatory)][string]$TaskId,[Parameter(Mandatory)][string]$WorkflowId,[Parameter(Mandatory)][string]$QaWorkflowId,[switch]$DryRun)
     $def=Get-MayaQaWorkflowDefinition $QaWorkflowId;$catalog=Get-MayaQaWorkflowCatalog
@@ -557,7 +573,7 @@ function Get-MayaQaDashboard { param([Parameter(Mandatory)][string]$StoreRoot,[P
     $qaFields=@('qaModelPath','qaFixtureSha256','qaReportPath','qaReportSha256');foreach($n in $qaFields){if($w.PSObject.Properties.Name -notcontains $n){$hashes+=[pscustomobject]@{Name=$n;Valid=$false};continue}}
     if($w.PSObject.Properties.Name -contains 'qaModelPath'){$qaPairs=@(@('Model',$w.qaModelPath,$w.qaFixtureSha256),@('Report',$w.qaReportPath,$w.qaReportSha256));foreach($pair in $qaPairs){$ok=Test-Path -LiteralPath $pair[1] -PathType Leaf;if($ok){$ok=(Get-FileHash -LiteralPath $pair[1] -Algorithm SHA256).Hash -ieq $pair[2]};$hashes+=[pscustomobject]@{Name=$pair[0];Path=$pair[1];ExpectedSha256=$pair[2];Valid=$ok};if(!$ok -and $w.qaCompletionStatus -eq 'completed'){throw "$($pair[0]) hash verification failed."}}}
     $receiptStatus='Missing';if($w.PSObject.Properties.Name -contains 'qaReceiptPath' -and $w.qaReceiptPath){$receipt=Get-MayaQaReceiptStatus $StoreRoot $TaskId $WorkflowId $QaWorkflowId;$receiptStatus='Valid'}elseif($w.PSObject.Properties.Name -contains 'qaCompletionStatus' -and $w.qaCompletionStatus -eq 'completed'){throw 'Completed QA workflow is missing its receipt.'}
-    [pscustomobject]@{Catalog=$catalog;SelectedWorkflowId=$QaWorkflowId;CapabilityFlags=$def.Capabilities;DeploymentWorkflowStatus=$w.status;QaApprovalStatus=$(if($w.PSObject.Properties.Name -contains 'qaApprovalStatus'){$w.qaApprovalStatus}else{$null});QaPlanStatus=$w.stage;ReportVerificationStatus=$(if($w.PSObject.Properties.Name -contains 'qaVerificationStatus'){$w.qaVerificationStatus}else{$null});QaCompletionStatus=$(if($w.PSObject.Properties.Name -contains 'qaCompletionStatus'){$w.qaCompletionStatus}else{$null});ReceiptStatus=$receiptStatus;CoordinatorRunId=$(if($w.PSObject.Properties.Name -contains 'qaEvidence'){$w.qaEvidence.CoordinatorRunId}else{$null});NativeRunId=$(if($w.PSObject.Properties.Name -contains 'qaEvidence'){$w.qaEvidence.NativeRunId}else{$null});HashVerification=$hashes;CompletionTimestamp=$(if($w.PSObject.Properties.Name -contains 'qaCompletedUtc'){$w.qaCompletedUtc}else{$null});SideEffectsPerformed=$false}
+    [pscustomobject]@{Catalog=$catalog;SelectedWorkflowId=$QaWorkflowId;CapabilityFlags=$def.Capabilities;RequestIntent=$(if($w.PSObject.Properties.Name -contains 'qaRequestIntent'){$w.qaRequestIntent}else{$null});DeploymentWorkflowStatus=$w.status;QaApprovalStatus=$(if($w.PSObject.Properties.Name -contains 'qaApprovalStatus'){$w.qaApprovalStatus}else{$null});QaPlanStatus=$w.stage;ReportVerificationStatus=$(if($w.PSObject.Properties.Name -contains 'qaVerificationStatus'){$w.qaVerificationStatus}else{$null});QaCompletionStatus=$(if($w.PSObject.Properties.Name -contains 'qaCompletionStatus'){$w.qaCompletionStatus}else{$null});ReceiptStatus=$receiptStatus;CoordinatorRunId=$(if($w.PSObject.Properties.Name -contains 'qaEvidence'){$w.qaEvidence.CoordinatorRunId}else{$null});NativeRunId=$(if($w.PSObject.Properties.Name -contains 'qaEvidence'){$w.qaEvidence.NativeRunId}else{$null});HashVerification=$hashes;CompletionTimestamp=$(if($w.PSObject.Properties.Name -contains 'qaCompletedUtc'){$w.qaCompletedUtc}else{$null});SideEffectsPerformed=$false}
 }
 function Invoke-MayaQaOverview { param([Parameter(Mandatory)][ValidateSet('qa-catalog-dry-run','qa-status','qa-receipt-status','qa-dashboard')][string]$Route,[string]$StoreRoot,[string]$TaskId,[string]$WorkflowId,[string]$QaWorkflowId,[switch]$DryRun)
     $result=switch($Route){'qa-catalog-dry-run'{Get-MayaQaCatalogDryRun $WorkflowId};'qa-status'{Get-MayaQaWorkflowStatus $StoreRoot $TaskId $WorkflowId};'qa-receipt-status'{Get-MayaQaReceiptStatus $StoreRoot $TaskId $WorkflowId $QaWorkflowId -DryRun:$DryRun};'qa-dashboard'{Get-MayaQaDashboard $StoreRoot $TaskId $WorkflowId $QaWorkflowId -DryRun:$DryRun}}
