@@ -1,16 +1,22 @@
 Set-StrictMode -Version Latest
 $script:Definitions = @{
     'welcome-smoke' = @{ FixtureId='CreateLevelsEmpty'; Source='CreateLevelsEmpty.rvt'; Prep=$null; TestId='welcome-supervised-dialog-v1'; Capabilities=@('prepare-fixture','report-verify','complete') }
+    'welcome-supervised-dialog-v1' = @{ FixtureId='CreateLevelsEmpty'; Source='CreateLevelsEmpty.rvt'; Prep=$null; TestId='welcome-supervised-dialog-v1'; Capabilities=@('prepare-fixture','report-verify','complete') }
     'create-grids-world-axis-v1' = @{ FixtureId='CreateGridsEmptyPlan'; Source='CreateGridsEmptyPlan.rvt'; Prep='Prepare-CreateGridsQaRun.ps1'; TestId='create-grids-world-axis-v1'; Capabilities=@('prepare-fixture','report-verify','complete') }
         'create-levels' = @{ FixtureId='CreateLevelsEmpty'; Source='CreateLevelsEmpty.rvt'; Prep='Prepare-CreateLevelsQaRun.ps1'; TestId='create-levels-elevations-v1'; Capabilities=@('prepare-fixture','report-verify','complete') }
     'create-levels-elevations-v1' = @{ FixtureId='CreateLevelsEmpty'; Source='CreateLevelsEmpty.rvt'; Prep='Prepare-CreateLevelsQaRun.ps1'; TestId='create-levels-elevations-v1'; Capabilities=@('prepare-fixture','report-verify','complete') }
     'grid-bubble-visibility-v1' = @{ FixtureId='GridBubbleVisibilityEmpty'; Source='GridBubbleVisibilityEmpty.rvt'; Prep='Prepare-GridBubbleVisibilityQaRun.ps1'; TestId='grid-bubble-visibility-v1'; Capabilities=@('prepare-fixture','report-verify','complete') }
     'grid-bubble-offset-v1' = @{ FixtureId='GridBubbleOffsetEmpty'; Source='GridBubbleOffsetEmpty.rvt'; Prep='Prepare-GridBubbleOffsetQaRun.ps1'; TestId='grid-bubble-offset-v1'; Capabilities=@('prepare-fixture','report-verify','complete') }
     'grid-resequence-v1' = @{ FixtureId='GridResequenceEmpty'; Source='GridResequenceEmpty.rvt'; Prep='Prepare-GridResequenceQaRun.ps1'; TestId='grid-resequence-all-directions-v1'; Capabilities=@('prepare-fixture','report-verify','complete') }
+    'grid-resequence-all-directions-v1' = @{ FixtureId='GridResequenceEmpty'; Source='GridResequenceEmpty.rvt'; Prep='Prepare-GridResequenceQaRun.ps1'; TestId='grid-resequence-all-directions-v1'; Capabilities=@('prepare-fixture','report-verify','complete') }
 }
 function Get-MayaQaWorkflowDefinition { param([Parameter(Mandatory)][string]$WorkflowId)
     if (-not $script:Definitions.ContainsKey($WorkflowId)) { throw "Unsupported QA workflow ID: $WorkflowId" }
     [pscustomobject]$script:Definitions[$WorkflowId]
+}
+function Resolve-MayaQaWorkflowId {
+    param([Parameter(Mandatory)][string]$WorkflowId)
+    return [string](Get-MayaQaWorkflowDefinition $WorkflowId).TestId
 }
 function Get-MayaQaWorkflowCatalog {
     @($script:Definitions.GetEnumerator() | Sort-Object Name | ForEach-Object {
@@ -26,7 +32,9 @@ function Invoke-MayaQaIntake {
     if ($TaskId -notmatch '^[A-Za-z0-9][A-Za-z0-9_-]{0,127}$') { throw 'Invalid task identity.' }
     if ($WorkflowId -notmatch '^[A-Za-z0-9][A-Za-z0-9_-]{0,127}$') { throw 'Invalid workflow identity.' }
     $resolved = Resolve-MayaQaRequestWorkflow $UserRequest
-    if($resolved -cne $QaWorkflowId){ throw "User request resolves to '$resolved', not '$QaWorkflowId'." }
+    $canonical = Resolve-MayaQaWorkflowId $QaWorkflowId
+    if($resolved -cne $canonical){ throw "User request resolves to '$resolved', not '$canonical'." }
+    $QaWorkflowId = $canonical
     $def = Get-MayaQaWorkflowDefinition $QaWorkflowId
     if ([string]::IsNullOrWhiteSpace($UserRequest)) { throw 'User request is required.' }
     [pscustomobject]@{
@@ -83,6 +91,7 @@ function Invoke-MayaQaIntake {
         $QaWorkflowId `
         $UserRequest `
         -DryRun:$true
+    $QaWorkflowId = Resolve-MayaQaWorkflowId $QaWorkflowId
 
     $requestId = 'build-' + [guid]::NewGuid().ToString('N')
     $requestedArtifact = 'bin\Release\net8.0-windows\Repato.Revit.dll'
@@ -167,16 +176,18 @@ function Invoke-MayaQaIntake {
 function Resolve-MayaQaRequestWorkflow {
     param([Parameter(Mandatory)][string]$Request)
     $text=$Request.Trim().ToLowerInvariant()
+    if (($text -match 'create[- ]levels' -or $text -match 'create\s+(?:one|two|three|four|five|six|seven|eight|nine|ten|\d+)\s+levels') -and $text -match 'grid[- ]resequence|resequence') { throw 'User request is ambiguous.' }
     $map=@{
+        'welcome-smoke'='welcome-supervised-dialog-v1';
         'create-grids-world-axis-v1'='create-grids-world-axis-v1';'create grids'='create-grids-world-axis-v1';'create grids world axis'='create-grids-world-axis-v1';
         'create-levels-elevations-v1'='create-levels-elevations-v1';'create-levels'='create-levels-elevations-v1';'create levels'='create-levels-elevations-v1';
         'grid-bubble-visibility-v1'='grid-bubble-visibility-v1';'grid bubble visibility'='grid-bubble-visibility-v1';
         'grid-bubble-offset-v1'='grid-bubble-offset-v1';'grid bubble offset'='grid-bubble-offset-v1';
-        'grid-resequence-v1'='grid-resequence-v1';'grid resequence'='grid-resequence-v1'
+        'grid-resequence-v1'='grid-resequence-all-directions-v1';'grid-resequence-all-directions-v1'='grid-resequence-all-directions-v1';'grid resequence'='grid-resequence-all-directions-v1'
     }
     if($map.ContainsKey($text)){return $map[$text]}
     if($text -match 'eight grids|create grids|world axis'){return 'create-grids-world-axis-v1'}
-    if($text -match 'create levels'){return 'create-levels-elevations-v1'}
+    if($text -match 'create[- ]levels' -or $text -match 'create\s+(?:one|two|three|four|five|six|seven|eight|nine|ten|\d+)\s+levels'){return 'create-levels-elevations-v1'}
     if($text -match 'bubble visibility'){return 'grid-bubble-visibility-v1'}
     if($text -match 'bubble offset'){return 'grid-bubble-offset-v1'}
     if($text -match 'resequence'){return 'grid-resequence-v1'}
@@ -225,6 +236,7 @@ function Invoke-MayaQaRequest {
 }
 function Invoke-MayaQaBuildExecute {
     param([Parameter(Mandatory)][string]$StoreRoot,[Parameter(Mandatory)][string]$TaskId,[Parameter(Mandatory)][string]$WorkflowId,[Parameter(Mandatory)][string]$QaWorkflowId,[string]$SourceBranch='current',[string]$ProjectPath='Forma.RevitConnector.csproj',[switch]$DryRun)
+    $QaWorkflowId = Resolve-MayaQaWorkflowId $QaWorkflowId
     if ([string]::IsNullOrWhiteSpace($SourceBranch)) { $SourceBranch = 'current' }
     if ([string]::IsNullOrWhiteSpace($ProjectPath)) { $ProjectPath = 'Forma.RevitConnector.csproj' }
     $def = Get-MayaQaWorkflowDefinition $QaWorkflowId
@@ -281,6 +293,7 @@ function New-MayaQaHandoff {
         [switch]$DryRun
     )
 
+    $QaWorkflowId = Resolve-MayaQaWorkflowId $QaWorkflowId
     $definition = Get-MayaQaWorkflowDefinition $QaWorkflowId
     if ($DryRun) {
         return [pscustomobject]@{
@@ -387,6 +400,7 @@ function Get-MayaQaWorkflowStatus { param([Parameter(Mandatory)][string]$StoreRo
 }
 function Get-MayaQaRoot { [IO.Path]::GetFullPath((Join-Path $PSScriptRoot '..\..\Source\QA')) }
 function New-MayaQaBootstrap { param([Parameter(Mandatory)][string]$QaWorkflowId,[Parameter(Mandatory)][string]$RunId,[string]$StoreRoot,[string]$TaskId,[switch]$DryRun)
+    $QaWorkflowId = Resolve-MayaQaWorkflowId $QaWorkflowId
     $def=Get-MayaQaWorkflowDefinition $QaWorkflowId
     if($RunId -notmatch '^[A-Za-z0-9][A-Za-z0-9_-]{0,79}$'){throw 'Invalid QA run ID.'}
     if(!$StoreRoot){$StoreRoot=Join-Path $env:TEMP ('maya-qa-store-'+[guid]::NewGuid().ToString('N'))}
@@ -409,6 +423,7 @@ function Assert-MayaQaPath { param([string]$Path,[string]$Root)
     if (-not $p.StartsWith($r,[StringComparison]::OrdinalIgnoreCase)) { throw "Path is outside approved QA root: $Path" }; $p
 }
 function New-MayaQaRun { param([Parameter(Mandatory)][string]$StoreRoot,[Parameter(Mandatory)][string]$TaskId,[Parameter(Mandatory)][string]$WorkflowId,[Parameter(Mandatory)][string]$QaWorkflowId,[Parameter(Mandatory)][string]$RunId,[switch]$DryRun)
+    $QaWorkflowId = Resolve-MayaQaWorkflowId $QaWorkflowId
     $def=Get-MayaQaWorkflowDefinition $QaWorkflowId; if ($RunId -notmatch '^[A-Za-z0-9][A-Za-z0-9_-]{0,79}$'){throw 'Invalid QA run ID.'}
     $w=Get-DeployWorkflow $StoreRoot $TaskId $WorkflowId
     if ($DryRun) { return [pscustomobject]@{WorkflowId=$WorkflowId;RunId=$RunId;Stage=$w.stage;SideEffectsPerformed=$false} }
@@ -549,4 +564,4 @@ function Invoke-MayaQaOverview { param([Parameter(Mandatory)][ValidateSet('qa-ca
     [pscustomobject]@{Operation=$Route;TimestampUtc=(Get-Date).ToUniversalTime().ToString('O');WorkflowId=$WorkflowId;QaWorkflowId=$QaWorkflowId;ResultStatus='ok';SideEffectsPerformed=$false;Result=$result}
 }
 . (Join-Path $PSScriptRoot 'MayaQa.TaraExecution.ps1')
-Export-ModuleMember -Function Invoke-MayaQaTaraExecute,Resolve-MayaQaRequestWorkflow,Invoke-MayaQaRequest,Get-MayaQaWorkflowDefinition,Get-MayaQaWorkflowCatalog,Get-MayaQaCatalogDryRun,Get-MayaQaWorkflowStatus,Invoke-MayaQaIntake,New-MayaQaBuildRequest,Invoke-MayaQaBuildExecute,New-MayaQaHandoff,Submit-MayaQaReport,Get-MayaQaDashboard,Invoke-MayaQaOverview,New-MayaQaBootstrap,New-MayaQaRun,Register-MayaQaReport,Complete-MayaQaWorkflow,New-MayaQaReceipt,Get-MayaQaReceiptStatus
+Export-ModuleMember -Function Invoke-MayaQaTaraExecute,Resolve-MayaQaRequestWorkflow,Resolve-MayaQaWorkflowId,Invoke-MayaQaRequest,Get-MayaQaWorkflowDefinition,Get-MayaQaWorkflowCatalog,Get-MayaQaCatalogDryRun,Get-MayaQaWorkflowStatus,Invoke-MayaQaIntake,New-MayaQaBuildRequest,Invoke-MayaQaBuildExecute,New-MayaQaHandoff,Submit-MayaQaReport,Get-MayaQaDashboard,Invoke-MayaQaOverview,New-MayaQaBootstrap,New-MayaQaRun,Register-MayaQaReport,Complete-MayaQaWorkflow,New-MayaQaReceipt,Get-MayaQaReceiptStatus
