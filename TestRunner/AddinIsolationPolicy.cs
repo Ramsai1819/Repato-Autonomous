@@ -30,7 +30,7 @@ public static class AddinIsolationPolicy
     }
 
     // Injectable paths are internal and used only by the standalone no-Revit checks.
-    internal static AddinInventory Inspect(string policyPath, string machineRoot, string userRoot, string sourceRoot)
+    internal static AddinInventory Inspect(string policyPath, string machineRoot, string userRoot, string sourceRoot, string? selectedManifestPath = null, string? selectedManifestSha256 = null)
     {
         var result = new AddinInventory { PolicyPath = policyPath };
         var approved = new Dictionary<string, (string Hash, string Reason)>(StringComparer.OrdinalIgnoreCase);
@@ -68,7 +68,7 @@ public static class AddinIsolationPolicy
 
         Scan(machineRoot, "MachineWide", approved, result, sourceRoot);
         if (string.IsNullOrWhiteSpace(userRoot)) result.Errors.Add("Current user APPDATA is unavailable.");
-        else Scan(userRoot, "UserProfile", approved, result, sourceRoot);
+        else Scan(userRoot, "UserProfile", approved, result, sourceRoot, selectedManifestPath, selectedManifestSha256);
         return result;
     }
 
@@ -80,7 +80,17 @@ public static class AddinIsolationPolicy
             throw new InvalidOperationException("Add-in isolation failed. Review AddinIsolation inventory and errors; do not run QA.");
     }
 
-    private static void Scan(string directory, string scope, Dictionary<string, (string Hash, string Reason)> approved, AddinInventory result, string sourceRoot)
+    public static void RequireAllowed(TestRunReport report, string selectedManifestPath, string selectedManifestSha256)
+    {
+        if (string.IsNullOrWhiteSpace(selectedManifestPath) || !Regex.IsMatch(selectedManifestSha256 ?? "", @"\A[0-9a-fA-F]{64}\z")) throw new InvalidOperationException("Selected QA runner identity is missing or malformed.");
+        string appData = Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData);
+        string userRoot = string.IsNullOrWhiteSpace(appData) ? "" : Path.Combine(appData, "Autodesk", "Revit", "Addins", "2025");
+        report.AddinIsolation = Inspect(PolicyPath, MachineWideRoot, userRoot, SourceRoot, selectedManifestPath, selectedManifestSha256);
+        report.Assert("addin-isolation", report.AddinIsolation.Allowed, "Only selected QA runner and approved machine-wide manifest hashes", report.AddinIsolation);
+        if (!report.AddinIsolation.Allowed) throw new InvalidOperationException("Add-in isolation failed. Review AddinIsolation inventory and errors; do not run QA.");
+    }
+
+    private static void Scan(string directory, string scope, Dictionary<string, (string Hash, string Reason)> approved, AddinInventory result, string sourceRoot, string? selectedManifestPath = null, string? selectedManifestSha256 = null)
     {
         string[] files;
         try
@@ -110,6 +120,14 @@ public static class AddinIsolationPolicy
                 else
                 {
                     string name = Path.GetFileName(path);
+                    if (selectedManifestPath is not null)
+                    {
+                        string selected = Path.GetFullPath(selectedManifestPath);
+                        allowed = string.Equals(path, selected, StringComparison.OrdinalIgnoreCase) && string.Equals(hash, selectedManifestSha256, StringComparison.OrdinalIgnoreCase);
+                        reason = allowed ? "Selected QA runner manifest and exact SHA-256." : "Unselected or hash-mismatched QA runner manifest.";
+                    }
+                    else
+                    {
                 if (name.Equals("Repato.CreateLevels.TestRunner.addin", StringComparison.OrdinalIgnoreCase) || name.Equals("Repato.CreateGrids.TestRunner.addin", StringComparison.OrdinalIgnoreCase) || name.Equals("Repato.TestRunner.addin", StringComparison.OrdinalIgnoreCase) || name.Equals("Repato.GridBubbleVisibility.TestRunner.addin", StringComparison.OrdinalIgnoreCase) || name.Equals("Repato.GridBubbleOffset.TestRunner.addin", StringComparison.OrdinalIgnoreCase) || name.Equals("Repato.GridResequence.TestRunner.addin", StringComparison.OrdinalIgnoreCase) || name.Equals("Repato.WelcomeSmoke.TestRunner.addin", StringComparison.OrdinalIgnoreCase))
                     {
                         string source = Path.Combine(sourceRoot, name);
@@ -118,6 +136,7 @@ public static class AddinIsolationPolicy
                         reason = allowed ? "Repository QA manifest bootstrap, exact source SHA-256." : "QA manifest differs from repository source.";
                     }
                     else reason = "User-profile manifest is not an approved QA bootstrap manifest.";
+                    }
                 }
             }
             catch (Exception ex) { reason = "Manifest inspection failed: " + ex.Message; }
