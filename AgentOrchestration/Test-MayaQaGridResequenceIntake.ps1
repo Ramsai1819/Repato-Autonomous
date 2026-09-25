@@ -3,6 +3,10 @@ $module = Join-Path $PSScriptRoot 'Repato.MayaQaWorkflow.psm1'
 Import-Module $module -Force
 
 $canonical = 'grid-resequence-v1'
+$definition = Get-MayaQaWorkflowDefinition $canonical
+if ($definition.TestId -ne $canonical -or $definition.NativeTestId -ne 'grid-resequence-all-directions-v1') {
+    throw 'Grid Resequence canonical/native test ID mapping is incorrect.'
+}
 $requests = @{
     'bottom to top' = 'Resequence the grids from bottom to top'
     'top to bottom' = 'Resequence the grids from top to bottom'
@@ -35,6 +39,10 @@ if ([string]::IsNullOrWhiteSpace([string]$named.RequestIntent.CustomNamingIntent
 if ($named.RequiredApprovalStage -ne 'Maya approval after Tara QA passed') {
     throw 'Approval-required state was not preserved.'
 }
+$handoff = New-MayaQaHandoff 'C:\synthetic-grid-resequence-store' 'task-grid-resequence' 'workflow-grid-resequence' $canonical -DryRun
+if ($handoff.QaWorkflowId -ne $canonical -or $handoff.NativeTestId -ne 'grid-resequence-all-directions-v1') {
+    throw 'Handoff did not preserve the expected canonical/native IDs.'
+}
 
 $unsupported = $false
 try { Resolve-MayaQaRequestWorkflow 'Resequence the views from bottom to top' | Out-Null } catch {
@@ -46,6 +54,7 @@ $source = Get-Content -LiteralPath $module -Raw
 if ($source -notmatch "Approved qa-run approval is required before Tara handoff") {
     throw 'Tara handoff approval gate is missing.'
 }
+if ($source -notmatch 'Get-MayaQaNativeTestId') { throw 'Tara native test ID mapping is not used.' }
 if ($source -match '(?i)Start-Process.*Revit|Revit\.exe|Invoke-TaraRevit|APPDATA') {
     throw 'Synthetic path contains Revit launch or production APPDATA access.'
 }
