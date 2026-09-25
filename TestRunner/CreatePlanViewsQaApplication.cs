@@ -39,7 +39,10 @@ public sealed class CreatePlanViewsQaApplication : IExternalApplication
             if (DateTimeOffset.UtcNow >= root.GetProperty("expiresUtc").GetDateTimeOffset()) throw new InvalidOperationException("QA request expired before execution.");
             if (!string.Equals(Environment.UserName, "RepatoQA", StringComparison.OrdinalIgnoreCase)) throw new InvalidOperationException("Automated startup is restricted to the RepatoQA Windows account.");
             if (app.Application.VersionNumber != "2025" || app.Application.Documents.Size != 0) throw new InvalidOperationException("Start a fresh Revit 2025 QA session with no open documents.");
-            report.IdentifyAssembly(); AddinIsolationPolicy.RequireAllowed(report);
+            report.IdentifyAssembly();
+            string selectedManifestPath = root.GetProperty("selectedManifestPath").GetString() ?? "";
+            string selectedManifestSha256 = root.GetProperty("selectedManifestSha256").GetString() ?? "";
+            AddinIsolationPolicy.RequireAllowed(report, selectedManifestPath, selectedManifestSha256);
             string model = QAPathPolicy.ValidatePath(root.GetProperty("modelPath").GetString() ?? "", QAPathPolicy.RunsRoot, true);
             string fixture = QAPathPolicy.ValidatePath(QAPathPolicy.RepositoryRoot + @"\QA\Fixtures\CreatePlanViewsEmpty.rvt", QAPathPolicy.RepositoryRoot + @"\QA\Fixtures", true);
             string sidecar = QAPathPolicy.ValidatePath(model + ".fixture.json", QAPathPolicy.RunsRoot, false);
