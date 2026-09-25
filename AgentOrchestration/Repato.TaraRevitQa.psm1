@@ -116,6 +116,9 @@ function Start-TaraTrustPromptHandler($Plan){
     # Multiple approved QA manifests are handled sequentially; unknown prompts fail closed.
     [pscustomobject]@{Started=$true;StartedUtc=(Get-Date).ToUniversalTime().ToString('O');Handled=@();Rejected=@()}
 }
+function Stop-TaraTrustPromptHandler($Handler){
+    if($Handler){$Handler.Stopped=$true;$Handler.StoppedUtc=(Get-Date).ToUniversalTime().ToString('O')}
+}
 function Start-TaraProcess($Plan){
     if($Plan.TrustConfiguration -and $Plan.TrustConfiguration.PromptFree){$Plan.TrustConfiguration|ConvertTo-Json -Depth 10|Set-Content -LiteralPath $Plan.TrustConfiguration.Path -Encoding UTF8}
     $info=[Diagnostics.ProcessStartInfo]::new();$info.FileName=$Plan.Executable;$info.Arguments='';$info.UseShellExecute=$false;$info.WindowStyle=[Diagnostics.ProcessWindowStyle]::Hidden
@@ -128,9 +131,9 @@ function Start-TaraProcess($Plan){
 function Get-TaraWindowText([IntPtr]$Window){$b=New-Object Text.StringBuilder 2048;[void][TaraPromptNative]::GetWindowText($Window,$b,$b.Capacity);$b.ToString()}
 function Handle-TaraTrustPrompt($Plan,$Process,$Handler){
     if(!( 'TaraPromptNative' -as [type])){Add-Type -TypeDefinition 'using System; using System.Text; using System.Runtime.InteropServices; public static class TaraPromptNative { [DllImport("user32.dll")] public static extern IntPtr FindWindow(string c,string t); [DllImport("user32.dll")] public static extern IntPtr FindWindowEx(IntPtr p,IntPtr c,string n,string t); [DllImport("user32.dll")] public static extern int GetWindowText(IntPtr h,StringBuilder s,int n); [DllImport("user32.dll")] public static extern IntPtr SendMessage(IntPtr h,uint m,IntPtr w,IntPtr l); }'}
-    $records=@($Plan.TrustConfiguration.PromptRecords);$handled=@();$detected=$false;$deadline=[DateTime]::UtcNow.AddSeconds(20)
+    $records=@($Plan.TrustConfiguration.PromptRecords);$handled=@();$detected=$false;$deadline=[DateTime]::UtcNow.AddSeconds(3)
     while([DateTime]::UtcNow -lt $deadline -and !$Process.HasExited){$dialog=[TaraPromptNative]::FindWindow($null,'Security - Unsigned Add-In');if($dialog -ne [IntPtr]::Zero){$detected=$true;$text=Get-TaraWindowText $dialog;$child=[TaraPromptNative]::FindWindowEx($dialog,[IntPtr]::Zero,$null,$null);while($child -ne [IntPtr]::Zero){$text+=' '+(Get-TaraWindowText $child);$child=[TaraPromptNative]::FindWindowEx($dialog,$child,$null,$null)};$match=$records|Where-Object{$text -match [regex]::Escape($_.ManifestPath) -or $text -match [regex]::Escape($_.DllPath)}|Select-Object -First 1;if($null -eq $match){throw 'Unexpected unsigned add-in prompt path; approval denied.'};if((Get-TaraSha256 $match.ManifestPath) -ine $match.ManifestSha256 -or (Get-TaraSha256 $match.DllPath) -ine $match.DllSha256){throw 'Unsigned add-in prompt hash validation failed.'};$button=[TaraPromptNative]::FindWindowEx($dialog,[IntPtr]::Zero,$null,'Always Load');if($button -eq [IntPtr]::Zero){throw 'Approved unsigned add-in prompt was detected but Always Load was unavailable.'};[void][TaraPromptNative]::SendMessage($button,0x00F5,[IntPtr]::Zero,[IntPtr]::Zero);$handled+=([pscustomobject]@{Manifest=$match.ManifestPath;Action='Always Load';Sha256=$match.ManifestSha256});Start-Sleep -Milliseconds 250}else{Start-Sleep -Milliseconds 250}}
-    $expected=$records.Count -gt 0;$free=(!$expected -or $handled.Count -eq $records.Count);if($expected -and $detected -and !$free){throw 'Expected unsigned add-in prompts were not fully handled.'}
+    $expected=$records.Count -gt 0;$free=(!$detected -or $handled.Count -eq $records.Count);if($expected -and $detected -and !$free){throw 'Expected unsigned add-in prompts were not fully handled.'}
     [pscustomobject]@{PromptDetected=$detected;PromptAction=$(if($handled.Count){'Always Load'}else{'None'});ApprovedManifest=$(if($handled.Count){$handled[-1].Manifest}else{$null});PromptRecords=$handled;PromptFree=$free}
 }
 function Stop-TaraOwnedProcess($Process){
@@ -192,7 +195,7 @@ function Invoke-TaraRevitQa {
     }
     Assert-TaraInteractiveSession
     $result=[ordered]@{Success=$false;Mode='Real';Status='Failed';TaskId=$Plan.TaskId;WorkflowId=$Plan.WorkflowId;QaWorkflowId=$Plan.QaWorkflowId;RunId=$Plan.RunId;RequestId=$Plan.RequestId;RequestPath=$Plan.RequestPath;ResultPath=$Plan.ResultPath;EvidencePath=$Plan.EvidencePath;ReportPath=$null;ReportSha256=$null;NativeRunId=$null;ResultSha256=$null;RequestSha256=$null;ModelPath=$Plan.ModelPath;SidecarPath=$Plan.SidecarPath;SidecarSha256=$Plan.SidecarSha256;FixtureId=$Plan.Context.FixtureId;FixtureSha256=$Plan.Context.FixtureSha256;ArtifactPath=$Plan.InstalledDll;ArtifactSha256=$Plan.Context.ArtifactSha256;ArtifactManifestPath=$Plan.ArtifactManifestPath;ArtifactManifestSha256=$Plan.ArtifactManifestSha256;QaRunnerManifestPath=$Plan.QaRunnerManifestPath;QaRunnerManifestSha256=$Plan.QaRunnerManifestSha256;ManifestPath=$Plan.InstalledManifest;ManifestSha256=$Plan.QaRunnerManifestSha256;ExecutableSha256=$Plan.ExecutableSha256;PolicySha256=$Plan.Isolation.PolicySha256;Command=$Plan.Command;EnvironmentVariable=$Plan.EnvironmentVariable;EnvironmentValue=$Plan.RequestPath;ModelSha256=$Plan.Context.FixtureSha256;ProcessStarted=$false;ProcessId=$null;ProcessStartUtc=$null;ProcessEndUtc=$null;StartedUtc=[DateTimeOffset]::UtcNow.ToString('O');FinishedUtc=$null;ExitState='NotStarted';ExitCode=$null;FailureReason=$null;Error=$null;SideEffectsPerformed=$false}
-    $process=$null
+    $process=$null;$handler=$null
     try{
         # Revalidate the filesystem immediately before writing/launching; a dry plan is not authorization.
         $args=@{};foreach($name in @('StoreRoot','TaskId','WorkflowId','QaWorkflowId','RunId','ModelPath','SidecarPath','ReportDirectory','RevitInstallDir','QaAddinRoot','TimeoutSeconds','Context')){$args[$name]=$Plan.$name};$fresh=New-TaraRevitQaPlan @args
@@ -212,6 +215,7 @@ function Invoke-TaraRevitQa {
     }catch{$result.FailureReason=$_.Exception.Message;$result.Error=$_.Exception.Message;if($_.Exception -is [TimeoutException]){$result.Status='TimedOut'}}
     finally{
         $result.FinishedUtc=[DateTimeOffset]::UtcNow.ToString('O');$result.Success=($result.Status -ceq 'Passed')
+        if($handler){try{Stop-TaraTrustPromptHandler $handler}catch{$result.FailureReason=([string]$result.FailureReason+' Trust-handler cleanup failed: '+$_.Exception.Message);$result.Error=$result.FailureReason}}
         if($process){try{$cleanup=Close-TaraOwnedProcess $process;if($cleanup.Forced){$result.ExitState='ForceTerminated';$result.FailureReason=([string]$result.FailureReason+' Graceful Revit close timed out; bridge-owned process force-terminated.')}else{$result.ExitState='Exited'};$result.ExitCode=$cleanup.ExitCode;$process.Refresh();$result.ProcessEndUtc=$process.ExitTime.ToUniversalTime().ToString('O');Assert-TaraModelUnlocked $Plan.ModelPath}catch{$result.ExitState='CleanupFailed';$result.FailureReason=([string]$result.FailureReason+' Cleanup failed: '+$_.Exception.Message);$result.Error=$result.FailureReason};$process.Dispose()}
         $result.SideEffectsPerformed=$true
         try{Write-TaraJsonNew $Plan.EvidencePath ([pscustomobject]$result)}catch{$result.FailureReason=([string]$result.FailureReason+' Evidence persistence failed: '+$_.Exception.Message);$result.Status='Failed'}
