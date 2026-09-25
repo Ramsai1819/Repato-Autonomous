@@ -1,1 +1,1 @@
-<RevitAddIns><AddIn Type="Application"><Name>Repato Create Plan Views QA</Name><Assembly>Repato.Revit.dll</Assembly><FullClassName>Repato.Revit.TestRunner.CreatePlanViewsQaApplication</FullClassName><AddInId>00000000-0000-0000-0000-000000000006</AddInId></AddIn></RevitAddIns>
+<RevitAddIns><AddIn Type="Application"><Name>Repato Create Plan Views QA</Name><Assembly>.\RepatoQA\Repato.Revit.dll</Assembly><FullClassName>Repato.Revit.TestRunner.CreatePlanViewsQaApplication</FullClassName><AddInId>00000000-0000-0000-0000-000000000006</AddInId></AddIn></RevitAddIns>
