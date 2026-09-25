@@ -50,7 +50,7 @@ function Assert-TaraRevitExecutableVersion([string]$Path){
     if((Get-Item -LiteralPath $Path).VersionInfo.ProductMajorPart -ne 25){throw 'Configured executable must be Revit 2025 (product major version 25).'} 
 }
 function Get-TaraQaTrustConfiguration($QaAddinRoot,$QaRoot,$Inventory){
-    $names=@('Repato.CreateLevels.TestRunner.addin','Repato.CreateGrids.TestRunner.addin','Repato.GridBubbleVisibility.TestRunner.addin','Repato.GridBubbleOffset.TestRunner.addin','Repato.GridResequence.TestRunner.addin')
+    $names=@('Repato.CreateLevels.TestRunner.addin','Repato.CreateGrids.TestRunner.addin','Repato.GridBubbleVisibility.TestRunner.addin','Repato.GridBubbleOffset.TestRunner.addin','Repato.GridResequence.TestRunner.addin','Repato.CreatePlanViews.TestRunner.addin')
     $records=@();foreach($n in $names){$p=Join-Path (Split-Path $QaAddinRoot -Parent) $n;$source=Join-Path $QaRoot $n;if(!(Test-Path $source -PathType Leaf)){continue};$h=Get-TaraSha256 $source;$records+=[pscustomobject]@{Name=$n;Path=$p;Sha256=$h}}
     $installed=@(Get-ChildItem -LiteralPath (Split-Path $QaAddinRoot -Parent) -Filter '*.addin' -File -ErrorAction Stop)
     $dllHash=Get-TaraSha256 (Join-Path $QaAddinRoot 'Repato.Revit.dll');$promptRecords=@();foreach($file in $installed){$match=$records|Where-Object Name -ceq $file.Name;if($null -eq $match){throw "Unexpected RepatoQA manifest installed: $($file.Name)"};$promptRecords+=[pscustomobject]@{ManifestName=$file.Name;ManifestPath=$file.FullName;ManifestSha256=$match.Sha256;DllPath=(Join-Path $QaAddinRoot 'Repato.Revit.dll');DllSha256=$dllHash;Approved=$true;PromptDetected=$false;PromptAction='Pending';Timestamp=(Get-Date).ToUniversalTime().ToString('O')}}
@@ -65,6 +65,7 @@ function New-TaraRevitQaPlan {
         'grid-bubble-offset-v1'=@('Repato.GridBubbleOffset.TestRunner.addin','REPATO_QA_GRID_BUBBLE_OFFSET_REQUEST','Invoke-GridBubbleOffsetQA.ps1','Repato.Revit.TestRunner.GridBubbleOffsetQaApplication')
           'grid-resequence-v1'=@('Repato.GridResequence.TestRunner.addin','REPATO_QA_GRID_RESEQUENCE_REQUEST','Invoke-GridResequenceQA.ps1','Repato.Revit.TestRunner.GridResequenceQaApplication')
           'create-grids-world-axis-v1'=@('Repato.CreateGrids.TestRunner.addin','REPATO_QA_CREATE_GRIDS_REQUEST','Invoke-CreateGridsQA.ps1','Repato.Revit.TestRunner.CreateGridsQaApplication')
+          'create-plan-views-v1'=@('Repato.CreatePlanViews.TestRunner.addin','REPATO_QA_CREATE_PLAN_VIEWS_REQUEST','Invoke-CreatePlanViewsQA.ps1','Repato.Revit.TestRunner.CreatePlanViewsQaApplication')
     }
       $runners['create-levels-elevations-v1']=$runners['create-levels']
     if(!$runners.ContainsKey($QaWorkflowId)){throw 'Workflow has no supported unattended startup runner (Welcome requires supervision; Create Grids has no startup application).'}
