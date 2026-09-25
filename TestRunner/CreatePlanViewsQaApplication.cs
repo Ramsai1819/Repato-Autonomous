@@ -48,11 +48,17 @@ public sealed class CreatePlanViewsQaApplication : IExternalApplication
             string sidecar = QAPathPolicy.ValidatePath(model + ".fixture.json", QAPathPolicy.RunsRoot, false);
             using var provenance = JsonDocument.Parse(File.ReadAllText(sidecar)); string sourceHash = provenance.RootElement.GetProperty("sourceSha256").GetString() ?? "";
             if (provenance.RootElement.GetProperty("fixtureId").GetString() != "CreatePlanViewsEmpty" || !string.Equals(sourceHash, TestRunReport.Hash(fixture), StringComparison.OrdinalIgnoreCase) || !string.Equals(sourceHash, TestRunReport.Hash(model), StringComparison.OrdinalIgnoreCase)) throw new InvalidOperationException("Fixture provenance failed before opening the model.");
+            report.FixtureSha256 = sourceHash;
             app.OpenAndActivateDocument(model); report.DocumentPath = model; EnsureRequiredLevels(app.ActiveUIDocument!.Document); app.ActiveUIDocument.Document.Save(); report.RuntimeModelSha256 = TestRunReport.Hash(model); Execute(app, report);
         }
         catch (Exception ex) { report.Status = "Failed"; report.Errors.Add("Create Plan Views isolation/execution failure: " + ex); }
-        try { string reportPath = report.Write(); if (receiptPath is not null) File.WriteAllText(receiptPath, JsonSerializer.Serialize(new { RequestId = requestId, report.RunId, ReportPath = reportPath, report.Status })); }
-        catch (Exception ex) { app.Application.WriteJournalComment("Repato Create Plan Views QA evidence failure: " + ex, false); }
+        finally
+        {
+            report.FinishedUtc = DateTimeOffset.UtcNow;
+            report.DurationMilliseconds = (report.FinishedUtc - report.StartedUtc).TotalMilliseconds;
+            try { string reportPath = report.Write(); if (receiptPath is not null) File.WriteAllText(receiptPath, JsonSerializer.Serialize(new { RequestId = requestId, report.RunId, ReportPath = reportPath, report.Status })); }
+            catch (Exception ex) { app.Application.WriteJournalComment("Repato Create Plan Views QA evidence failure: " + ex, false); }
+        }
     }
 
     private static void EnsureRequiredLevels(Document document)
