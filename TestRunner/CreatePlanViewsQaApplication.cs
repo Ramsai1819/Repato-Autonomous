@@ -48,11 +48,24 @@ public sealed class CreatePlanViewsQaApplication : IExternalApplication
             string sidecar = QAPathPolicy.ValidatePath(model + ".fixture.json", QAPathPolicy.RunsRoot, false);
             using var provenance = JsonDocument.Parse(File.ReadAllText(sidecar)); string sourceHash = provenance.RootElement.GetProperty("sourceSha256").GetString() ?? "";
             if (provenance.RootElement.GetProperty("fixtureId").GetString() != "CreatePlanViewsEmpty" || !string.Equals(sourceHash, TestRunReport.Hash(fixture), StringComparison.OrdinalIgnoreCase) || !string.Equals(sourceHash, TestRunReport.Hash(model), StringComparison.OrdinalIgnoreCase)) throw new InvalidOperationException("Fixture provenance failed before opening the model.");
-            app.OpenAndActivateDocument(model); report.DocumentPath = model; Execute(app, report);
+            app.OpenAndActivateDocument(model); report.DocumentPath = model; EnsureRequiredLevels(app.ActiveUIDocument!.Document); Execute(app, report);
         }
         catch (Exception ex) { report.Status = "Failed"; report.Errors.Add("Create Plan Views isolation/execution failure: " + ex); }
         try { string reportPath = report.Write(); if (receiptPath is not null) File.WriteAllText(receiptPath, JsonSerializer.Serialize(new { RequestId = requestId, report.RunId, ReportPath = reportPath, report.Status })); }
         catch (Exception ex) { app.Application.WriteJournalComment("Repato Create Plan Views QA evidence failure: " + ex, false); }
+    }
+
+    private static void EnsureRequiredLevels(Document document)
+    {
+        var required = new[] { (Name: "0", Millimeters: 0.0), (Name: "1", Millimeters: 3000.0), (Name: "2", Millimeters: 6000.0) };
+        using var transaction = new Transaction(document, "Repato QA prepare Create Plan Views levels");
+        transaction.Start();
+        foreach (var item in required)
+        {
+            if (new FilteredElementCollector(document).OfClass(typeof(Level)).Cast<Level>().Any(level => level.Name.Equals(item.Name, StringComparison.OrdinalIgnoreCase))) continue;
+            Level.Create(document, UnitUtils.ConvertToInternalUnits(item.Millimeters, UnitTypeId.Millimeters)).Name = item.Name;
+        }
+        transaction.Commit();
     }
 
     private static void Execute(UIApplication app, TestRunReport report)
