@@ -9,6 +9,7 @@ $script:Definitions = @{
     'grid-bubble-offset-v1' = @{ FixtureId='GridBubbleOffsetEmpty'; Source='GridBubbleOffsetEmpty.rvt'; Prep='Prepare-GridBubbleOffsetQaRun.ps1'; TestId='grid-bubble-offset-v1'; Capabilities=@('prepare-fixture','report-verify','complete') }
     'grid-resequence-v1' = @{ FixtureId='GridResequenceEmpty'; Source='GridResequenceEmpty.rvt'; Prep='Prepare-GridResequenceQaRun.ps1'; TestId='grid-resequence-v1'; NativeTestId='grid-resequence-all-directions-v1'; Capabilities=@('prepare-fixture','report-verify','complete') }
     'grid-resequence-all-directions-v1' = @{ FixtureId='GridResequenceEmpty'; Source='GridResequenceEmpty.rvt'; Prep='Prepare-GridResequenceQaRun.ps1'; TestId='grid-resequence-v1'; NativeTestId='grid-resequence-all-directions-v1'; Capabilities=@('prepare-fixture','report-verify','complete') }
+    'create-plan-views-v1' = @{ FixtureId='CreatePlanViewsEmpty'; Source='CreatePlanViewsEmpty.rvt'; Prep='Prepare-CreatePlanViewsQaRun.ps1'; TestId='create-plan-views-v1'; NativeTestId='create-plan-views-v1'; Capabilities=@('prepare-fixture','report-verify','complete') }
 }
 function Get-MayaQaWorkflowDefinition { param([Parameter(Mandatory)][string]$WorkflowId)
     if (-not $script:Definitions.ContainsKey($WorkflowId)) { throw "Unsupported QA workflow ID: $WorkflowId" }
@@ -36,12 +37,18 @@ function Get-MayaQaRequestIntent {
         'right\s+to\s+left' = 'RightToLeft'
     }
     foreach ($pattern in $directionMap.Keys) { if ($text -match $pattern) { $direction = $directionMap[$pattern]; break } }
+    $levels=@();if($text -match '\blevels?\s+(?<list>.*?)(?:\s+at\s|\s+using\s|\s+named\s|$)'){$levels=@([regex]::Matches($Matches.list,'\d+')|ForEach-Object{[int]$_.Value})}
+    $scale=if($text -match '(?<scale>\d+\s*:\s*\d+)'){$Matches.scale -replace '\s',''}else{$null}
     [pscustomobject]@{
         GridSelection = if ($text -match 'selected\s+grids?|selected\s+grid') { 'selected-grids' } else { $null }
         BubbleSides = @(@('left','right','top','bottom') | Where-Object { $text -match "\b$_\b" })
         OffsetMillimetres = $offset
         ResequenceDirection = $direction
         CustomNamingIntent = if ($text -match 'custom\s+naming|name|naming|label|prefix|number') { $Request } else { $null }
+        SelectedLevels = $levels
+        ViewType = if ($text -match 'floor\s+plan') { 'floor-plan' } elseif ($text -match 'ceiling\s+plan') { 'ceiling-plan' } else { $null }
+        Scale = $scale
+        TemplateIntent = if ($text -match 'template|using\s+the') { $Request } else { $null }
     }
 }
 function Get-MayaQaWorkflowCatalog {
@@ -210,7 +217,7 @@ function Resolve-MayaQaRequestWorkflow {
     $map=@{
         'welcome-smoke'='welcome-supervised-dialog-v1';
         'create-grids-world-axis-v1'='create-grids-world-axis-v1';'create grids'='create-grids-world-axis-v1';'create grids world axis'='create-grids-world-axis-v1';
-        'create-levels-elevations-v1'='create-levels-elevations-v1';'create-levels'='create-levels-elevations-v1';'create levels'='create-levels-elevations-v1';
+        'create-levels-elevations-v1'='create-levels-elevations-v1';'create-levels'='create-levels-elevations-v1';'create levels'='create-levels-elevations-v1';'create-plan-views-v1'='create-plan-views-v1';
         'grid-bubble-visibility-v1'='grid-bubble-visibility-v1';'grid bubble visibility'='grid-bubble-visibility-v1';
         'grid-bubble-offset-v1'='grid-bubble-offset-v1';'grid bubble offset'='grid-bubble-offset-v1';
         'grid-resequence-v1'='grid-resequence-v1';'grid-resequence-all-directions-v1'='grid-resequence-v1';'grid resequence'='grid-resequence-v1'
@@ -220,6 +227,9 @@ function Resolve-MayaQaRequestWorkflow {
     if($text -match 'create[- ]levels' -or $text -match 'create\s+(?:one|two|three|four|five|six|seven|eight|nine|ten|\d+)\s+levels'){return 'create-levels-elevations-v1'}
     if($text -match 'bubble visibility' -or ($text -match '(show|display|hide|turn)\b' -and $text -match 'bubbles?' -and $text -match 'selected\s+grids?')){return 'grid-bubble-visibility-v1'}
     if($text -match 'bubble offset' -or ($text -match '(offset|move|shift)' -and $text -match 'bubbles?' -and $text -match '\b(?:-?\d+(?:\.\d+)?)\s*mm\b')){return 'grid-bubble-offset-v1'}
+    if($text -match 'plan\s+views?|floor\s+plan|ceiling\s+plan'){
+        return 'create-plan-views-v1'
+    }
     if($text -match 'resequence'){
         if($text -notmatch '\bgrids?\b'){throw 'User request does not identify a supported QA workflow.'}
         return 'grid-resequence-v1'

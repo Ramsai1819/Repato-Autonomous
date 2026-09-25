@@ -28,6 +28,6 @@ $bad = $false
 try { New-MayaQaHandoff $mismatchRoot $boot.TaskId $boot.WorkflowId create-levels | Out-Null } catch { $bad = $true }
 if (-not $bad) { throw 'Mismatched store accepted.' }
 $unsupported = $false
-try { New-MayaQaHandoff $root ('task-' + [guid]::NewGuid().ToString('N')) ('workflow-' + [guid]::NewGuid().ToString('N')) create-plan-views -DryRun | Out-Null } catch { $unsupported = $true }
+try { New-MayaQaHandoff $root ('task-' + [guid]::NewGuid().ToString('N')) ('workflow-' + [guid]::NewGuid().ToString('N')) create-schedules -DryRun | Out-Null } catch { $unsupported = $true }
 if (-not $unsupported) { throw 'Unsupported workflow accepted.' }
 'Maya QA handoff checks passed: 8'
