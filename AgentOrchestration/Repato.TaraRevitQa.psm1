@@ -118,7 +118,13 @@ function Start-TaraTrustPromptHandler($Plan){
     [pscustomobject]@{Started=$true;StartedUtc=(Get-Date).ToUniversalTime().ToString('O');Handled=@();Rejected=@()}
 }
 function Stop-TaraTrustPromptHandler($Handler){
-    if($Handler){$Handler.Stopped=$true;$Handler.StoppedUtc=(Get-Date).ToUniversalTime().ToString('O')}
+    if($null -eq $Handler){return}
+    try {
+        if($Handler.PSObject.Properties.Name -contains 'Stopped'){$Handler.Stopped=$true}
+        if($Handler.PSObject.Properties.Name -contains 'StoppedUtc'){$Handler.StoppedUtc=(Get-Date).ToUniversalTime().ToString('O')}
+    } finally {
+        if($Handler -is [IDisposable]){try{$Handler.Dispose()}catch{}}
+    }
 }
 function Start-TaraProcess($Plan){
     if($Plan.TrustConfiguration -and $Plan.TrustConfiguration.PromptFree){$Plan.TrustConfiguration|ConvertTo-Json -Depth 10|Set-Content -LiteralPath $Plan.TrustConfiguration.Path -Encoding UTF8}
