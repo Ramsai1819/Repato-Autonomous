@@ -48,7 +48,7 @@ public sealed class CreatePlanViewsQaApplication : IExternalApplication
             string sidecar = QAPathPolicy.ValidatePath(model + ".fixture.json", QAPathPolicy.RunsRoot, false);
             using var provenance = JsonDocument.Parse(File.ReadAllText(sidecar)); string sourceHash = provenance.RootElement.GetProperty("sourceSha256").GetString() ?? "";
             if (provenance.RootElement.GetProperty("fixtureId").GetString() != "CreatePlanViewsEmpty" || !string.Equals(sourceHash, TestRunReport.Hash(fixture), StringComparison.OrdinalIgnoreCase) || !string.Equals(sourceHash, TestRunReport.Hash(model), StringComparison.OrdinalIgnoreCase)) throw new InvalidOperationException("Fixture provenance failed before opening the model.");
-            app.OpenAndActivateDocument(model); report.DocumentPath = model; EnsureRequiredLevels(app.ActiveUIDocument!.Document); Execute(app, report);
+            app.OpenAndActivateDocument(model); report.DocumentPath = model; EnsureRequiredLevels(app.ActiveUIDocument!.Document); app.ActiveUIDocument.Document.Save(); report.RuntimeModelSha256 = TestRunReport.Hash(model); Execute(app, report);
         }
         catch (Exception ex) { report.Status = "Failed"; report.Errors.Add("Create Plan Views isolation/execution failure: " + ex); }
         try { string reportPath = report.Write(); if (receiptPath is not null) File.WriteAllText(receiptPath, JsonSerializer.Serialize(new { RequestId = requestId, report.RunId, ReportPath = reportPath, report.Status })); }

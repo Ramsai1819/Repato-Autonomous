@@ -14,6 +14,7 @@ public sealed class TestRunReport
     public string DocumentPath { get; set; } = "";
     public string FixtureId { get; set; } = "";
     public string FixtureSha256 { get; set; } = "";
+    public string RuntimeModelSha256 { get; set; } = "";
     public object Inputs { get; set; } = new
     {
         VerticalNames = new[] { "A", "B", "C", "D" },
