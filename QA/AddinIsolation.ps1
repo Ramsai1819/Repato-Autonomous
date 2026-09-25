@@ -1,7 +1,7 @@
 # Shared preflight/verification functions. No actions occur when dot-sourced.
 # Path overrides exist only for synthetic checks; the Install/Run CLI fixes all roots.
 function Get-AddinIsolationInventory {
-    param([string]$PolicyPath, [string]$MachineRoot, [string]$UserRoot, [string]$QaSourceRoot)
+    param([string]$PolicyPath, [string]$MachineRoot, [string]$UserRoot, [string]$QaSourceRoot, [string]$ApprovedUserManifestName)
     $inventory = [ordered]@{
         PolicyPath = $PolicyPath; PolicySha256 = ''; DetectedAddins = @(); Errors = @(); Allowed = $false
     }
@@ -46,7 +46,10 @@ function Get-AddinIsolationInventory {
                 elseif ($scope -eq 'UserProfile') {
                     # Only the two repository-owned QA bootstrap manifests are eligible.
                     # The machine-wide allowlist can never authorize a user-profile add-in.
-                    if ($file.Name -in @('Repato.CreateLevels.TestRunner.addin','Repato.CreateGrids.TestRunner.addin','Repato.TestRunner.addin','Repato.GridBubbleVisibility.TestRunner.addin','Repato.GridBubbleOffset.TestRunner.addin','Repato.GridResequence.TestRunner.addin','Repato.WelcomeSmoke.TestRunner.addin')) {
+                    $eligible = if ([string]::IsNullOrWhiteSpace($ApprovedUserManifestName)) {
+                        $file.Name -in @('Repato.CreateLevels.TestRunner.addin','Repato.CreateGrids.TestRunner.addin','Repato.TestRunner.addin','Repato.GridBubbleVisibility.TestRunner.addin','Repato.GridBubbleOffset.TestRunner.addin','Repato.GridResequence.TestRunner.addin','Repato.WelcomeSmoke.TestRunner.addin')
+                    } else { $file.Name -ceq $ApprovedUserManifestName }
+                    if ($eligible) {
                         $source = Assert-ChildPath (Join-Path $QaSourceRoot $file.Name) $QaSourceRoot
                         $sourceHash = Get-Sha256 $source
                         $detected.Allowlisted = $detected.Sha256 -ieq $sourceHash -and (!$qaManifestHashes.ContainsKey($file.Name) -or $detected.Sha256 -ieq $qaManifestHashes[$file.Name])
