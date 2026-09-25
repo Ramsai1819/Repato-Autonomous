@@ -57,14 +57,21 @@ function Invoke-MayaQaTaraExecute {
         throw 'Valid completed Neil Release build evidence is required.'
     }
     $handoff = $workflow.qaHandoff
+    $nativeTestId = if (Get-Command Get-MayaQaNativeTestId -ErrorAction SilentlyContinue) {
+        Get-MayaQaNativeTestId $definition
+    } elseif ($definition.PSObject.Properties.Name -contains 'NativeTestId' -and $definition.NativeTestId) {
+        [string]$definition.NativeTestId
+    } else {
+        [string]$definition.TestId
+    }
     if ($handoff.HandoffId -cne $workflow.qaHandoffId -or $handoff.HandoffStatus -cne 'ready' -or
         $handoff.TaskId -cne $TaskId -or $handoff.QaWorkflowId -cne $QaWorkflowId -or
         (($handoff.PSObject.Properties.Name -contains 'BuildRequestId') -and $handoff.BuildRequestId -cne $buildRequestId) -or
         $handoff.FixtureId -cne $definition.FixtureId -or
-        $handoff.NativeTestId -cne $definition.TestId) { throw 'Tara handoff identity mismatch.' }
+        $handoff.NativeTestId -cne $nativeTestId) { throw 'Tara handoff identity mismatch.' }
     if ($workflow.taskId -cne $TaskId -or $workflow.qaWorkflowId -cne $QaWorkflowId -or
         $workflow.qaRunId -cne $RunId -or $workflow.qaFixtureId -cne $definition.FixtureId -or
-        $workflow.qaTestId -cne $definition.TestId) { throw 'Tara QA run plan identity mismatch.' }
+        $workflow.qaTestId -cne $nativeTestId) { throw 'Tara QA run plan identity mismatch.' }
     foreach ($pair in @(@($ModelPath,$workflow.qaModelPath),@($SidecarPath,$workflow.qaSidecarPath),
         @($ModelPath,$handoff.ModelPath),@($SidecarPath,$handoff.SidecarPath),
         @($build.ArtifactPath,$handoff.ArtifactPath),@($build.ManifestPath,$handoff.ManifestPath))) {
@@ -92,7 +99,7 @@ function Invoke-MayaQaTaraExecute {
     $qaRoot = Get-MayaQaRoot
     $context = [pscustomobject]@{
         QaRoot=$qaRoot; SourceFixturePath=(Join-Path (Join-Path $qaRoot 'Fixtures') $definition.Source)
-        FixtureId=$definition.FixtureId; FixtureSha256=$workflow.qaFixtureSha256; TestId=$definition.TestId
+        FixtureId=$definition.FixtureId; FixtureSha256=$workflow.qaFixtureSha256; TestId=$nativeTestId
         ArtifactPath=$build.ArtifactPath; ArtifactSha256=$build.ArtifactSha256
         ManifestPath=$build.ManifestPath; ManifestSha256=$build.ManifestSha256
         TaskId=$TaskId; WorkflowId=$WorkflowId; QaWorkflowId=$QaWorkflowId; RunId=$RunId
