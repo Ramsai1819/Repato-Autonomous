@@ -1,0 +1,12 @@
+<?xml version="1.0" encoding="utf-8"?>
+<RevitAddIns>
+  <!-- Source template only. Never install from the repository; stage a versioned isolated QA candidate first. -->
+  <AddIn Type="Application">
+    <Name>Repato Create RCP Views QA</Name>
+    <Assembly>.\RepatoRcpQa\Repato.RcpQaRunner.dll</Assembly>
+    <AddInId>00000000-0000-0000-0000-000000000007</AddInId>
+    <FullClassName>Repato.RcpQaRunner.RcpQaApplication</FullClassName>
+    <VendorId>RPTQ</VendorId>
+    <VendorDescription>Repato isolated QA-only Create RCP Views runner</VendorDescription>
+  </AddIn>
+</RevitAddIns>

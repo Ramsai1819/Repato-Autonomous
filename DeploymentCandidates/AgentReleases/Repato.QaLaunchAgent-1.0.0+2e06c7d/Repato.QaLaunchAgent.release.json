@@ -1,0 +1,19 @@
+{
+  "schemaVersion": 1,
+  "product": "Repato.QaLaunchAgent",
+  "productVersion": "1.0.0+a3e55bd9e70d0194a133dd49bfa8b0185ac8e186",
+  "sourceCommit": "a3e55bd9e70d0194a133dd49bfa8b0185ac8e186",
+  "buildConfiguration": "Release",
+  "targetFramework": "net8.0-windows",
+  "dependency": { "System.IO.Pipes.AccessControl": "6.0.0-preview.5.21301.5" },
+  "artifactLocation": "DeploymentCandidates/AgentReleases/Repato.QaLaunchAgent-1.0.0+2e06c7d",
+  "createdAtUtc": "2026-09-29T16:35:00Z",
+  "account": "RAMSAI\\RepatoQA",
+  "sid": "S-1-5-21-1031246752-3872016183-2454652381-1015",
+  "files": [
+    { "name": "Repato.QaLaunchAgent.exe", "sha256": "54B8FB91DF41479F23F94ABBCBC4B85E28B7E30A3CAC462558406904AF9A731B" },
+    { "name": "Repato.QaLaunchAgent.dll", "sha256": "DCDF53FFDC79748FBE06E4A194E51998978DA09A15552762334152F8316A0CE9" },
+    { "name": "Repato.QaLaunchAgent.deps.json", "sha256": "757B9F8505AF05922257064161085B07679ACAEC797C42188216553F45FA81B8" },
+    { "name": "Repato.QaLaunchAgent.runtimeconfig.json", "sha256": "CA1A6B5B185174698E0F5F9AE732AD3D2D3ED5B122ED666F35CC214283E83B7F" }
+  ]
+}

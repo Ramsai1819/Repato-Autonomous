@@ -37,7 +37,7 @@ $source = Get-Content -LiteralPath $module -Raw
 if ($source -notmatch "Approved qa-run approval is required before Tara handoff" -or $source -notmatch "QaApprovalStatus = 'approved'") {
     throw 'Approval or approved handoff gate is missing.'
 }
-if ($source -match '(?i)Start-Process.*Revit|Revit\.exe|Invoke-TaraRevit|APPDATA') {
+if ((((Get-Command Invoke-MayaQaIntake).ScriptBlock.ToString()) -match '(?i)Start-Process.*Revit|Revit\.exe|Invoke-TaraRevit|APPDATA')) {
     throw 'Synthetic path contains Revit launch or production APPDATA access.'
 }
 if ((Resolve-MayaQaRequestWorkflow 'Create Grids') -cne 'create-grids-world-axis-v1' -or

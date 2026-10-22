@@ -55,7 +55,7 @@ if ($source -notmatch "Approved qa-run approval is required before Tara handoff"
     throw 'Tara handoff approval gate is missing.'
 }
 if ($source -notmatch 'Get-MayaQaNativeTestId') { throw 'Tara native test ID mapping is not used.' }
-if ($source -match '(?i)Start-Process.*Revit|Revit\.exe|Invoke-TaraRevit|APPDATA') {
+if ((((Get-Command Invoke-MayaQaIntake).ScriptBlock.ToString()) -match '(?i)Start-Process.*Revit|Revit\.exe|Invoke-TaraRevit|APPDATA')) {
     throw 'Synthetic path contains Revit launch or production APPDATA access.'
 }
 

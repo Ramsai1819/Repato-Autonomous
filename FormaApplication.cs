@@ -72,11 +72,22 @@ public sealed class RepatoApplication : IExternalApplication
             ToolTip = "Rename selected vertical grids left to right and horizontal grids bottom to top."
         };
 
+        var createRcpButton = new PushButtonData(
+            "RepatoCreateRcpViews",
+            "Create RCP\nViews",
+            assemblyPath,
+            "Repato.Revit.CreateReflectedCeilingPlansCommand"
+        )
+        {
+            ToolTip = "Create reflected ceiling plan views for selected levels using the chosen ceiling plan type."
+        };
+
         panel.AddItem(createGridsButton);
         panel.AddItem(createLevelsButton);
         panel.AddItem(bubbleVisibilityButton);
         panel.AddItem(offsetBubblesButton);
         panel.AddItem(resequenceButton);
+        panel.AddItem(createRcpButton);
 
         return Result.Succeeded;
     }

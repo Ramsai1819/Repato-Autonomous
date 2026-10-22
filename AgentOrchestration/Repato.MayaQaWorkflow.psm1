@@ -935,6 +935,8 @@ function Recover-MayaQaCorrelatedNativeFailure {
         $identity.RunId -ceq [string]$old.RunId -and $_.bindingHash -ceq $approvedRequest.bindingHash
     })
     if($currentApprovals.Count -ne 1 -or $currentApprovals[0].decidedBy -cne 'user'){throw 'Failed attempt human approval changed during recovery compare-and-swap.'}
+    if($currentApprovals[0].consumedUtc -and [DateTimeOffset]::Parse([string]$currentApprovals[0].consumedUtc) -ne $launchedUtc){throw 'Human approval consumption timestamp conflicts with the recorded native launch.'}
+    if(!$currentApprovals[0].consumedUtc){$currentApprovals[0].consumedUtc=$launchedUtc.ToString('O')}
     if($currentApprovals[0].consumedUtc -and [DateTimeOffset]::Parse([string]$currentApprovals[0].consumedUtc, [Globalization.CultureInfo]::InvariantCulture, [Globalization.DateTimeStyles]::RoundtripKind) -ne $launchedUtc){throw 'Human approval consumption timestamp conflicts with the recorded native launch.'}
     if(!$currentApprovals[0].consumedUtc){$currentApprovals[0].consumedUtc=$launchedUtc.ToString('O', [Globalization.CultureInfo]::InvariantCulture)}
     $arch=[pscustomobject]$x;
@@ -3754,8 +3756,8 @@ function Complete-MayaQaApprovedRunAuthorization {
         if($runIdProp -and $runIdProp.Value -and [string]$runIdProp.Value -cne $nativeRunId){throw 'Approved run authorization run identity is already bound to a different native run.'}
         $changed=$false
         if(!$runIdProp -or !$runIdProp.Value){$ap|Add-Member NoteProperty runId ([string]$nativeRunId) -Force;$changed=$true}
-        if(!$ap.consumedUtc){$ap.consumedUtc=$launchedUtc.ToString('O', [Globalization.CultureInfo]::InvariantCulture);$changed=$true}
-        if($changed){Add-RepatoHistory $t 'maya-qa-approved-run-authorization-consumed' 'Maya' "approval=$($ap.requestId); run=$nativeRunId; launchedUtc=$($launchedUtc.ToString('O', [Globalization.CultureInfo]::InvariantCulture))"}
+        if(!$ap.consumedUtc){$ap.consumedUtc=$launchedUtc.ToString('O');$changed=$true}
+        if($changed){Add-RepatoHistory $t 'maya-qa-approved-run-authorization-consumed' 'Maya' "approval=$($ap.requestId); run=$nativeRunId; launchedUtc=$($launchedUtc.ToString('O'))"}
         [pscustomobject]@{Status='Reconciled';TaskId=$TaskId;WorkflowId=$WorkflowId;ApprovalId=[string]$ap.requestId;RunId=$nativeRunId;ConsumedUtc=[string]$ap.consumedUtc;TaskRevision=[long]$t.revision;SideEffectsPerformed=$true}
     }
 }
@@ -3800,7 +3802,7 @@ function Invoke-MayaQaRevitGracefulShutdownCore {
         try{
             if($target.HasExited){$closed=$true;$detail='process-already-exited'}
             elseif($target.MainWindowHandle -eq [IntPtr]::Zero){$detail='window-close-unavailable';$closed=$false}
-            else{$closeMethod=$target.PSObject.Methods['CloseMainWindow'];$closeValue=if($closeMethod){$closeMethod.Invoke()}else{$target.CloseMainWindow()};$closed=[bool]$closeValue;if($closed){$detail='window-close-requested'}}
+            else{$closed=[bool]$target.CloseMainWindow();if($closed){$detail='window-close-requested'}}
         }catch{$closed=$false;$detail='window-close-refused'}
         if($closed -and $detail -ceq 'window-close-requested'){$sideEffects=$true}
         if(-not $closed){

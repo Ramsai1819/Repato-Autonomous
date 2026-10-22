@@ -24,5 +24,14 @@ internal static class QAPathPolicy
             throw new InvalidOperationException("An existing .rvt file is required.");
         return full;
     }
+
+    internal static string ValidatePreparationEvidencePath(string path, string parent)
+    {
+        // Preparation receipts are JSON evidence, not Revit models. Keep the same
+        // local-root and reparse-point checks without imposing the model extension.
+        string full = ValidatePath(path, parent, requireRvt: false);
+        if (!File.Exists(full)) throw new InvalidOperationException("Existing preparation evidence is required.");
+        return full;
+    }
 }
 

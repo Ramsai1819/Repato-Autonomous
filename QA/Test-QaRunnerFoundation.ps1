@@ -8,7 +8,7 @@ $identity=Read-RepatoQaFixtureProvenance $fixture $provenance 'Fixture' @('1','A
 $run=New-RepatoQaRun $runs 'tool' 'tool.request.json' 'test-v1' $fixture $identity ('A'*64) ([pscustomobject]@{Allowed=$true;DetectedAddins=[object[]]@();Errors=[object[]]@()}) 30
 if(!(Test-Path $run.ModelPath)-or!(Test-Path $run.RequestPath)-or(Get-RepatoQaSha256 $run.ModelPath)-ne$hash){throw 'Disposable run creation failed'}
 $request=Get-Content $run.RequestPath -Raw|ConvertFrom-Json
-if($request.requestId-cne$run.RequestId-or$request.testId-cne'test-v1'-or[DateTimeOffset]::Parse($request.expiresUtc)-lt[DateTimeOffset]::UtcNow.AddMinutes(19)){throw 'Fresh request contract failed'}
+if($request.requestId-cne$run.RequestId-or$request.testId-cne'test-v1'-or(Get-RepatoQaNormalizedUtc $request.expiresUtc 'Request expiresUtc')-lt[DateTimeOffset]::UtcNow.AddMinutes(19)){throw 'Fresh request contract failed'}
 $blocked=$false;try{Assert-RepatoQaChildPath (Join-Path $runs '..\escape') $runs|Out-Null}catch{$blocked=$true};if(!$blocked){throw 'Path escape accepted'}
 $evidence=Join-Path $root 'evidence.json';Write-RepatoQaDiagnostic $evidence 'Run' 'test-v1' 'Failed' @{error='preserved'}
 $blocked=$false;try{Write-RepatoQaDiagnostic $evidence 'Run' 'test-v1' 'Failed' @{} }catch{$blocked=$true};if(!$blocked){throw 'Evidence overwrite accepted'}

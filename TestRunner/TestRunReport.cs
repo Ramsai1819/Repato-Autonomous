@@ -8,8 +8,13 @@ namespace Repato.Revit.TestRunner;
 public sealed class TestRunReport
 {
     public string SchemaVersion { get; } = "1";
-    public string RunId { get; } = Guid.NewGuid().ToString("N");
+    public string RunId { get; set; } = Guid.NewGuid().ToString("N");
     public string TestId { get; set; } = "";
+    public string RequestId { get; set; } = "";
+    public string TaskId { get; set; } = "";
+    public string WorkflowId { get; set; } = "";
+    public string AttemptId { get; set; } = "";
+    public string ClaimId { get; set; } = "";
     public string Status { get; set; } = "Failed";
     public string DocumentPath { get; set; } = "";
     public string FixtureId { get; set; } = "";

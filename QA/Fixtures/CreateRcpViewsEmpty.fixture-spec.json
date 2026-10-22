@@ -1,0 +1,31 @@
+{
+  "schemaVersion": 1,
+  "fixtureSpecId": "rcp-empty-three-levels-v1",
+  "fixtureId": "RcpEmptyThreeLevels",
+  "intendedModel": {
+    "format": "Revit 2025",
+    "documentKind": "local non-workshared project",
+    "workshared": false,
+    "links": [],
+    "existingCeilingPlanViews": []
+  },
+  "levels": [
+    { "name": "Level 0", "elevationMm": 0 },
+    { "name": "Level 1", "elevationMm": 3000 },
+    { "name": "Level 2", "elevationMm": 6000 }
+  ],
+  "viewFamilyType": { "viewFamily": "CeilingPlan", "name": "Ceiling Plan", "expectedUniqueCount": 1 },
+  "expectedCreatedViews": [
+    { "name": "Level 0 - RCP", "level": "Level 0", "viewFamily": "CeilingPlan", "viewFamilyType": "Ceiling Plan" },
+    { "name": "Level 1 - RCP", "level": "Level 1", "viewFamily": "CeilingPlan", "viewFamilyType": "Ceiling Plan" },
+    { "name": "Level 2 - RCP", "level": "Level 2", "viewFamily": "CeilingPlan", "viewFamilyType": "Ceiling Plan" }
+  ],
+  "execution": {
+    "createAllInOneTransaction": true,
+    "rollbackTransactionGroupAfterAssertions": true,
+    "saveModel": false,
+    "synchronize": false,
+    "requireBaselineElementIdsRestored": true,
+    "requireModelFileSha256Unchanged": true
+  }
+}

@@ -12,18 +12,57 @@ function Invoke-MayaQaTaraExecute {
         [Parameter(Mandatory)][string]$ReportDirectory,
         [string]$RevitInstallDir = 'E:\revit\Revit 2025',
         [Parameter(Mandatory)][string]$QaAddinRoot,
-        [ValidateRange(1,3600)][int]$TimeoutSeconds = 900,
+        [ValidateRange(1,86400)][int]$TimeoutSeconds = 900,
         [switch]$LocalRun,
         [switch]$DryRun,
         [switch]$IntegrationTest
         ,[string]$HandoffPath
+        ,[scriptblock]$CanonicalProcessLauncher
+        ,[object]$CanonicalResult
     )
     if([string]::IsNullOrWhiteSpace($HandoffPath) -and [string]::IsNullOrWhiteSpace($StoreRoot)){throw 'StoreRoot is required when HandoffPath is not supplied.'}
+    $resolvedFromTaskStore=$false
+    if([string]::IsNullOrWhiteSpace($HandoffPath) -and $TaskId -and ([string]::IsNullOrWhiteSpace($WorkflowId) -or [string]::IsNullOrWhiteSpace($QaWorkflowId) -or [string]::IsNullOrWhiteSpace($RunId))){
+        $storedTask=(Find-RepatoTask (Read-RepatoTaskStore $StoreRoot) $TaskId)
+        $probe=Resolve-MayaQaTaskStoreIdentity $StoreRoot $TaskId $(if($WorkflowId){$WorkflowId}else{$storedTask.mayaPlan.WorkflowId}) $(if($QaWorkflowId){$QaWorkflowId}else{$storedTask.mayaPlan.QaWorkflowId})
+        if(@($probe.Errors).Count){throw ('Persisted Maya identity chain is invalid: '+(@($probe.Errors)-join '; '))}
+        $WorkflowId=$probe.SelectedWorkflowId;$QaWorkflowId=$probe.SelectedQaWorkflowId;$RunId=$probe.SelectedRunId;$resolvedFromTaskStore=$true
+        if($DryRun){
+            $task=Find-RepatoTask (Read-RepatoTaskStore $StoreRoot) $TaskId;$packet=$task.mayaTaraQaPacket
+            Import-Module (Join-Path $PSScriptRoot 'Repato.TaraRevitQa.psm1') -WarningAction SilentlyContinue
+            $definition=Get-MayaQaWorkflowDefinition $probe.SelectedQaWorkflowId;$qaRoot=[IO.Path]::GetFullPath((Get-MayaQaRoot));$source=[IO.Path]::GetFullPath($packet.FixturePath);$qaRuns=[IO.Path]::GetFullPath((Join-Path $qaRoot 'TestRuns'));$runtime=[IO.Path]::GetFullPath((Join-Path $qaRuns ($probe.SelectedRunId+'-preflight')));$prefix=$qaRuns.TrimEnd('\')+'\';if(!$runtime.StartsWith($prefix,[StringComparison]::OrdinalIgnoreCase)){throw 'Disposable QA runtime escaped approved QA root.'};if($source -ieq $runtime -or !$source.StartsWith(([IO.Path]::GetFullPath((Join-Path $qaRoot 'Fixtures')).TrimEnd('\')+'\'),[StringComparison]::OrdinalIgnoreCase)){throw 'Authoritative fixture path is invalid.'};$sourceHash=(Get-FileHash -LiteralPath $source -Algorithm SHA256).Hash;if($sourceHash -ine $packet.FixtureSha256){throw 'Authoritative fixture hash mismatch.'};New-Item -ItemType Directory -Path $runtime -Force|Out-Null;$model=Join-Path $runtime 'model.rvt';$sidecar=$model+'.fixture.json';Copy-Item -LiteralPath $source -Destination $model -Force;$copyHash=(Get-FileHash -LiteralPath $model -Algorithm SHA256).Hash;if($copyHash -ine $sourceHash){throw 'Disposable fixture hash mismatch.'};[ordered]@{fixtureId=$definition.FixtureId;sourceSha256=$sourceHash}|ConvertTo-Json|Set-Content -LiteralPath $sidecar -Encoding UTF8
+            $context=[pscustomobject]@{QaRoot=$qaRoot;SourceFixturePath=$source;FixtureId=$definition.FixtureId;FixtureSha256=$sourceHash;TestId=(Get-MayaQaNativeTestId $definition);ArtifactPath=$packet.ArtifactPath;ArtifactSha256=$packet.ArtifactSha256;ManifestPath=$packet.ManifestPath;ManifestSha256=$packet.ManifestSha256;TaskId=$probe.SelectedTaskId;WorkflowId=$probe.SelectedWorkflowId;QaWorkflowId=$probe.SelectedQaWorkflowId;RunId=$probe.SelectedRunId}
+            try{$plan=New-TaraRevitQaPlan -StoreRoot $StoreRoot -TaskId $probe.SelectedTaskId -WorkflowId $probe.SelectedWorkflowId -QaWorkflowId $probe.SelectedQaWorkflowId -RunId $probe.SelectedRunId -ModelPath $model -SidecarPath $sidecar -ReportDirectory $ReportDirectory -RevitInstallDir $RevitInstallDir -QaAddinRoot $QaAddinRoot -TimeoutSeconds $TimeoutSeconds -Context $context -DryRun; $safe=Invoke-TaraRevitQa -Plan $plan -DryRun;return [pscustomobject]@{Success=$safe.Success;Mode='Preflight';Stage='qa-launch-preparation';TaskId=$probe.SelectedTaskId;WorkflowId=$probe.SelectedWorkflowId;QaWorkflowId=$probe.SelectedQaWorkflowId;TestId=$context.TestId;HandoffId=$probe.SelectedHandoffId;AttemptId=$probe.SelectedAttemptId;RunId=$probe.SelectedRunId;FixturePath=$source;FixtureSha256=$sourceHash;DisposableFixturePath=$model;DisposableFixtureSha256=$copyHash;ArtifactPath=$context.ArtifactPath;ArtifactSha256=$context.ArtifactSha256;RunnerManifest=$plan.QaRunnerManifestPath;RunnerManifestSha256=$plan.QaRunnerManifestSha256;Command=$plan.Command;Isolation=$plan.Isolation;ReadyToLaunch=$safe.Success;ProcessStarted=$false;SideEffectsPerformed=$false;Errors=@()}}catch{$msg=$_.Exception.Message;return [pscustomobject]@{Success=$false;Mode='Preflight';Stage='qa-launch-preparation';TaskId=$probe.SelectedTaskId;WorkflowId=$probe.SelectedWorkflowId;QaWorkflowId=$probe.SelectedQaWorkflowId;TestId=$context.TestId;HandoffId=$probe.SelectedHandoffId;AttemptId=$probe.SelectedAttemptId;RunId=$probe.SelectedRunId;FixturePath=$source;FixtureSha256=$sourceHash;DisposableFixturePath=$model;DisposableFixtureSha256=$copyHash;ReadyToLaunch=$false;ProcessStarted=$false;SideEffectsPerformed=$false;Errors=@($msg)}}
+        }
+    }
     if($HandoffPath){$h=Get-Content -LiteralPath $HandoffPath -Raw|ConvertFrom-Json;foreach($n in @('StoreRoot','TaskId','WorkflowId','QaWorkflowId','RunId','HandoffId','ModelPath','SidecarPath','ArtifactPath','ArtifactSha256','ManifestPath','ManifestSha256')){if($h.PSObject.Properties.Name -notcontains $n -or [string]::IsNullOrWhiteSpace([string]$h.$n)){throw "Invalid handoff: missing $n"}};if($StoreRoot -and [IO.Path]::GetFullPath($StoreRoot) -ine [IO.Path]::GetFullPath($h.StoreRoot)){throw 'Supplied StoreRoot does not match the durable handoff.'};foreach($p in @('HandoffPath','StoreRoot','ModelPath','SidecarPath','ArtifactPath','ManifestPath')){ $v=if($p -eq 'HandoffPath'){$HandoffPath}else{$h.$p};if(!(Test-Path -LiteralPath $v)){throw "Invalid handoff accessibility: $p is missing or unreadable ($v)."}};$StoreRoot=$h.StoreRoot;$TaskId=$h.TaskId;$WorkflowId=$h.WorkflowId;$QaWorkflowId=$h.QaWorkflowId;$RunId=$h.RunId;$ModelPath=$h.ModelPath;$SidecarPath=$h.SidecarPath}
     foreach ($identity in @($TaskId,$WorkflowId,$QaWorkflowId,$RunId)) {
         if ($identity -notmatch '^[A-Za-z0-9][A-Za-z0-9_-]{0,127}$') { throw 'Invalid Tara workflow identity.' }
     }
     if (!$DryRun -and !$IntegrationTest) { throw 'Real Tara execution requires explicit -IntegrationTest authorization in an interactive RepatoQA session.' }
+
+    # Canonical Maya executions are owned by mayaTaraExecution.  Route these
+    # through the lifecycle-connected native core before touching the legacy
+    # deployment workflow surface.  This is deliberately detected from the
+    # task record, so canonical execution remains valid when
+    # deploymentWorkflows is absent altogether.
+    if ($TaskId -and $StoreRoot) {
+        $canonicalData = Read-RepatoTaskStore $StoreRoot
+        $canonicalTask = Find-RepatoTask $canonicalData $TaskId
+        if ($canonicalTask.PSObject.Properties.Name -contains 'mayaTaraExecution' -and $canonicalTask.mayaTaraExecution) {
+            $canonical = $canonicalTask.mayaTaraExecution
+            if ($DryRun) {
+                return [pscustomobject]@{Success=$true;Mode='Canonical';Stage=$canonical.Stage;ExecutionStatus=$canonical.ExecutionStatus;TaskId=$canonical.TaskId;WorkflowId=$canonical.WorkflowId;QaWorkflowId=$canonical.QaWorkflowId;AttemptId=$canonical.AttemptId;RunId=$canonical.RunId;ClaimId=$canonical.ClaimId;ProcessStarted=$false;SideEffectsPerformed=$false}
+            }
+            if ([string]::IsNullOrWhiteSpace([string]$canonical.ClaimId)) { throw 'Canonical Maya execution is not claimed.' }
+            $exe = Join-Path $RevitInstallDir 'Revit.exe'
+            if($canonical.Stage -ceq 'executing') { return Resume-MayaQaCanonicalExecution -StoreRoot $StoreRoot -TaskId $TaskId -ClaimId $canonical.ClaimId -ResultPath $canonical.ResultPath -TimeoutSeconds $TimeoutSeconds }
+            return Invoke-MayaQaCanonicalNativeCore -StoreRoot $StoreRoot -TaskId $TaskId -ClaimId $canonical.ClaimId -Executable $exe -Arguments '' -ProcessLauncher $CanonicalProcessLauncher -Result $CanonicalResult
+        }
+        if ($canonicalTask.PSObject.Properties.Name -contains 'mayaTaraAttempt' -and $canonicalTask.mayaTaraAttempt) {
+            throw 'Canonical Maya Tara attempt exists without an execution record; legacy Tara dispatch is forbidden.'
+        }
+    }
     $definition = Get-MayaQaWorkflowDefinition $QaWorkflowId
     $workflow = Get-DeployWorkflow $StoreRoot $TaskId $WorkflowId
     $data = Read-RepatoTaskStore $StoreRoot
@@ -157,3 +196,4 @@ function Invoke-MayaQaTaraExecute {
     catch { throw "Tara execution finished but store persistence failed: $($_.Exception.Message). Preserve bridge evidence; do not retry execution." }
     $result
 }
+

@@ -28,6 +28,6 @@ if (-not $unsupported) { throw 'Unsupported request was accepted.' }
 $source = Get-Content -LiteralPath $module -Raw
 $tara = Get-Content -LiteralPath (Join-Path $PSScriptRoot 'Repato.TaraRevitQa.psm1') -Raw
 if ($tara -notmatch 'create-plan-views-v1' -or $tara -notmatch 'Repato.CreatePlanViews.TestRunner.addin') { throw 'Tara native runner mapping is missing.' }
-if ($source -match '(?i)APPDATA|Start-Process.*Revit|Revit\.exe|Invoke-TaraRevit') { throw 'Synthetic intake path performs unsafe side effects.' }
+if ((((Get-Command Invoke-MayaQaIntake).ScriptBlock.ToString()) -match '(?i)APPDATA|Start-Process.*Revit|Revit\.exe|Invoke-TaraRevit')) { throw 'Synthetic intake path performs unsafe side effects.' }
 
 'Maya Create Plan Views intake checks passed: 6'

@@ -5,6 +5,8 @@
     <UseWPF>true</UseWPF>
     <Nullable>enable</Nullable>
     <ImplicitUsings>enable</ImplicitUsings>
+    <!-- Deployment artifacts and nested worktrees are never project source inputs. -->
+    <DefaultItemExcludes>$(DefaultItemExcludes);DeploymentCandidates\**;DeploymentBackups\**;.worktrees\**;.release-worktree-*\**;.diagnostic-publish*\**</DefaultItemExcludes>
 
     <AssemblyName>Repato.Revit</AssemblyName>
     <RootNamespace>Repato.Revit</RootNamespace>
@@ -14,6 +16,7 @@
   </PropertyGroup>
 
   <ItemGroup>
+    <EmbeddedResource Include="QA\ToolQaRegistry.v1.json" LogicalName="Repato.ToolQaRegistry.v1.json" />
     <Reference Include="RevitAPI">
       <HintPath>$(RevitInstallDir)\RevitAPI.dll</HintPath>
       <Private>false</Private>
@@ -29,6 +32,16 @@
     <Compile Remove="ConnectorModels.cs" />
     <Compile Remove="ConnectorServer.cs" />
     <Compile Remove="FormaEventHandler.cs" />
+    <Compile Remove="QaLaunchAgent\**\*.cs" />
+    <Compile Remove="QaLaunchAgent.ProtocolInteropTests\**\*.cs" />
+    <Compile Remove="TestRunner.ContractTests\**\*.cs" />
+    <Compile Remove="ReflectedCeilingPlans.ContractTests\**\*.cs" />
+    <Compile Remove="RcpQaRunner\**\*.cs" />
+    <Compile Remove="RcpQaRunner.ContractTests\**\*.cs" />
+    <Compile Remove="RcpNativeProtocol.ContractTests\**\*.cs" />
+    <Compile Remove="ToolQaFramework.ContractTests\**\*.cs" />
+    <Compile Remove="CpvPreparation.ContractTests\**\*.cs" />
+    <Compile Remove="CandidateRunnerBindingCheck\**\*.cs" />
   </ItemGroup>
 
   <Target Name="CheckRevitApi" BeforeTargets="ResolveReferences">

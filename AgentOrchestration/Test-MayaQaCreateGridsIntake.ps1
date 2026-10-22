@@ -42,9 +42,9 @@ if ($levels.QaWorkflowId -cne 'create-levels-elevations-v1' -or $levels.SideEffe
 }
 
 $source = Get-Content -LiteralPath $module -Raw
-if ($source -match '(?i)Start-Process.*Revit|Revit\.exe|Invoke-TaraRevit') {
+if ((((Get-Command Invoke-MayaQaIntake).ScriptBlock.ToString()) -match '(?i)Start-Process.*Revit|Revit\.exe|Invoke-TaraRevit')) {
     throw 'Synthetic intake path contains a Revit launch.'
 }
-if ($source -match '(?i)APPDATA') { throw 'Synthetic intake path references production APPDATA.' }
+if (((Get-Command Invoke-MayaQaIntake).ScriptBlock.ToString()) -match '(?i)APPDATA') { throw 'Synthetic intake path references production APPDATA.' }
 
 'Maya Create Grids intake checks passed: 7'

@@ -1,0 +1,27 @@
+{
+  "schemaVersion": 1,
+  "tools": [
+    {
+      "toolId": "create-plan-views-v1",
+      "testId": "create-plan-views-v1",
+      "runnerIdentity": "Repato.Revit.TestRunner.CreatePlanViewsQaApplication",
+      "manifestFile": "Repato.CreatePlanViews.TestRunner.addin",
+      "requestSchemaVersion": 2,
+      "requestOperation": "launch-revit-qa",
+      "fixtureContractId": "cpv-fixture-preparation-v1",
+      "fixtureSpecId": "CreatePlanViewsEmpty",
+      "capabilities": ["fixture-evidence", "approval-binding", "receipt-report", "rollback", "cleanup"]
+    },
+    {
+      "toolId": "create-rcp-views-v1",
+      "testId": "create-rcp-views-v1",
+      "runnerIdentity": "Repato.RcpQaRunner.RcpQaApplication",
+      "manifestFile": "Repato.CreateRcpViews.TestRunner.addin",
+      "requestSchemaVersion": 1,
+      "requestOperation": "create-rcp-views-qa",
+      "fixtureContractId": "rcp-fixture-preparation-v1",
+      "fixtureSpecId": "rcp-empty-three-levels-v1",
+      "capabilities": ["fixture-evidence", "approval-binding", "receipt-report", "rollback", "cleanup"]
+    }
+  ]
+}

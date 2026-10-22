@@ -72,11 +72,22 @@ function Wait-RepatoQaResult {
     $ResultPath
 }
 
+function Get-RepatoQaNormalizedUtc($Value,[string]$Context = 'Timestamp'){
+    if($Value -is [DateTimeOffset]){return $Value.ToUniversalTime()}
+    if($Value -is [DateTime]){
+        $offset = if($Value.Kind -eq [DateTimeKind]::Utc){[TimeSpan]::Zero} elseif($Value.Kind -eq [DateTimeKind]::Local){[TimeZoneInfo]::Local.GetUtcOffset($Value)} else {[TimeZoneInfo]::Local.GetUtcOffset($Value)}
+        return [DateTimeOffset]::new($Value,$offset)
+    }
+    $candidate=[DateTimeOffset]::MinValue
+    if([DateTimeOffset]::TryParse([string]$Value,[Globalization.CultureInfo]::InvariantCulture,[Globalization.DateTimeStyles]::RoundtripKind,[ref]$candidate)){return $candidate.ToUniversalTime()}
+    throw "$Context timestamp is invalid."
+}
+
 function Find-RepatoQaStaleRequests {
     param([string]$RunsRoot,[string]$RequestName)
     @(
         Get-ChildItem -LiteralPath $RunsRoot -Filter $RequestName -File -Recurse -ErrorAction SilentlyContinue|ForEach-Object{
-            try{$request=Get-Content $_.FullName -Raw|ConvertFrom-Json;if([DateTimeOffset]::Parse($request.expiresUtc)-lt[DateTimeOffset]::UtcNow){[pscustomobject]@{Status='StaleRequestPreserved';Path=$_.FullName;RequestId=$request.requestId}}}
+            try{$request=Get-Content $_.FullName -Raw|ConvertFrom-Json;if((Get-RepatoQaNormalizedUtc $request.expiresUtc 'Request expiresUtc')-lt[DateTimeOffset]::UtcNow){[pscustomobject]@{Status='StaleRequestPreserved';Path=$_.FullName;RequestId=$request.requestId}}}
             catch{[pscustomobject]@{Status='InvalidRequestPreserved';Path=$_.FullName;Error=$_.Exception.Message}}
         }
     )

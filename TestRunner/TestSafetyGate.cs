@@ -13,7 +13,8 @@ internal static class TestSafetyGate
     internal static string ReportsRoot => RepositoryRoot + @"\QA\Reports";
     private static string FixturesRoot => RepositoryRoot + @"\QA\Fixtures";
 
-    internal static void Verify(Document document, TestRunReport report, string? requiredFixtureId = null, bool allowControlledFixtureSource = false)
+    internal static void Verify(Document document, TestRunReport report, string? requiredFixtureId = null,
+        CreatePlanViewsRequest? request = null, bool allowControlledFixtureSource = false)
     {
         if (document.IsFamilyDocument || document.IsLinked || document.IsReadOnly || document.IsModified || document.IsModifiable ||
             document.IsWorkshared || document.IsModelInCloud || document.IsDetached)
@@ -48,7 +49,7 @@ internal static class TestSafetyGate
         else
         {
             string sidecarPath = QAPathPolicy.ValidatePath(path + ".fixture.json", RunsRoot, false);
-            json = JsonDocument.Parse(File.ReadAllText(sidecarPath));
+            json = JsonDocument.Parse(RecoveredFixtureProvenance.Resolve(path, request).GetRawText());
             fixtureId = json.RootElement.GetProperty("fixtureId").GetString() ?? "";
             expectedHash = json.RootElement.GetProperty("sourceSha256").GetString() ?? "";
         }
@@ -63,13 +64,14 @@ internal static class TestSafetyGate
             string[] declared = json is not null && json.RootElement.TryGetProperty("requiredGridNames", out JsonElement names)
                 ? names.EnumerateArray().Select(item => item.GetString() ?? "").ToArray()
                 : [];
-            if (!FixtureContentPolicy.SameNames(declared, approvedNames))
+            if (json is not null && !FixtureContentPolicy.SameNames(declared, approvedNames))
                 throw new InvalidOperationException("Fixture sidecar does not declare the exact approved grid set.");
         }
         string fixturePath = QAPathPolicy.ValidatePath(Path.Combine(FixturesRoot, fixtureId + ".rvt"), FixturesRoot, true);
-        if (!string.Equals(TestRunReport.Hash(fixturePath), expectedHash, StringComparison.OrdinalIgnoreCase) ||
-            !string.Equals(TestRunReport.Hash(path), expectedHash, StringComparison.OrdinalIgnoreCase))
-            throw new InvalidOperationException("Run copy must exactly match the approved controlled fixture and its SHA-256.");
+
+        if (json is not null)
+            TestSafetyGateProvenance.Verify(json.RootElement, TestRunReport.Hash(fixturePath), TestRunReport.Hash(path), request);
+
         report.FixtureId = fixtureId;
         report.FixtureSha256 = expectedHash;
         report.Assert("safety-gate", true, "Controlled local disposable fixture", path);

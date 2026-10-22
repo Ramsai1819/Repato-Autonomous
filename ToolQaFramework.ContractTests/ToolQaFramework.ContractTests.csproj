@@ -1,0 +1,13 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <OutputType>Exe</OutputType>
+    <TargetFramework>net8.0</TargetFramework>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <Nullable>enable</Nullable>
+  </PropertyGroup>
+  <ItemGroup>
+    <Compile Include="..\ToolQaFramework\ToolQaDescriptor.cs" Link="ToolQaDescriptor.cs" />
+    <Content Include="..\QA\ToolQaRegistry.v1.json" Link="ToolQaRegistry.v1.json" CopyToOutputDirectory="PreserveNewest" />
+    <EmbeddedResource Include="..\QA\ToolQaRegistry.v1.json" LogicalName="Repato.ToolQaRegistry.v1.json" />
+  </ItemGroup>
+</Project>

@@ -46,7 +46,8 @@ function Report-StaleRequests {
     foreach ($request in @(Get-ChildItem -LiteralPath $runsRoot -Filter 'levels.request.json' -File -Recurse -ErrorAction SilentlyContinue)) {
         try {
             $data = Get-Content -LiteralPath $request.FullName -Raw | ConvertFrom-Json
-            if ([DateTimeOffset]::Parse($data.expiresUtc) -lt $now) {
+            $expiresValue = if ($data.expiresUtc -is [DateTime]) { [DateTimeOffset]::new($data.expiresUtc, $(if ($data.expiresUtc.Kind -eq [DateTimeKind]::Utc){[TimeSpan]::Zero}else{[TimeZoneInfo]::Local.GetUtcOffset($data.expiresUtc)})) } else { [DateTimeOffset]::Parse([string]$data.expiresUtc, [Globalization.CultureInfo]::InvariantCulture, [Globalization.DateTimeStyles]::RoundtripKind) }
+            if ($expiresValue -lt $now) {
                 $reportPath = Join-Path $reportsRoot ('stale-request-' + $request.Directory.Name + '.json')
                 if (!(Test-Path -LiteralPath $reportPath)) {
                     @{Status='StaleRequestPreserved';RequestPath=$request.FullName;RequestId=$data.requestId;DetectedUtc=$now.ToString('O');Action='Preserved; fresh request created'} | ConvertTo-Json | Set-Content -LiteralPath $reportPath -Encoding UTF8

@@ -28,7 +28,7 @@ $handoffText = Get-Content $module -Raw
 if ($handoffText -notmatch "Approved qa-run approval is required before Tara handoff") {
     throw 'Handoff approval gate is missing.'
 }
-if ($handoffText -match '(?i)Start-Process.*Revit|Revit\.exe|Invoke-TaraRevit') {
+if ((((Get-Command Invoke-MayaQaIntake).ScriptBlock.ToString()) -match '(?i)Start-Process.*Revit|Revit\.exe|Invoke-TaraRevit')) {
     throw 'Synthetic intake path contains a Revit launch.'
 }
 

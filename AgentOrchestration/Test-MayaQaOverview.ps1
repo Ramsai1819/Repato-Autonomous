@@ -1,4 +1,4 @@
-﻿$ErrorActionPreference = 'Stop'
+$ErrorActionPreference = 'Stop'
 $WarningPreference = 'SilentlyContinue'
 $cli = Join-Path $PSScriptRoot 'Invoke-MayaQaWorkflow.ps1'
 function Invoke-Overview([string[]] $Arguments) {
@@ -9,7 +9,7 @@ function Invoke-Overview([string[]] $Arguments) {
     return ($text | ConvertFrom-Json)
 }
 $catalog = Invoke-Overview @('-Operation','qa-overview','-Route','qa-catalog-dry-run','-DryRun')
-if ($catalog.Operation -ne 'qa-catalog-dry-run' -or $catalog.ResultStatus -ne 'ok' -or $catalog.SideEffectsPerformed -or @($catalog.Result.Workflows).Count -ne 6) { throw 'Catalog overview envelope mismatch.' }
+if ($catalog.Operation -ne 'qa-catalog-dry-run' -or $catalog.ResultStatus -ne 'ok' -or $catalog.SideEffectsPerformed -or @($catalog.Result.Workflows).Count -ne 10) { throw 'Catalog overview envelope mismatch.' }
 $dashboard = Invoke-Overview @('-Operation','qa-overview','-Route','qa-dashboard','-StoreRoot','unused','-TaskId','unused','-WorkflowId','unused','-QaWorkflowId','create-levels','-DryRun')
 if ($dashboard.Operation -ne 'qa-dashboard' -or $dashboard.ResultStatus -ne 'ok' -or $dashboard.SideEffectsPerformed) { throw 'Dashboard overview dry-run mismatch.' }
 foreach ($route in @('qa-status','qa-receipt-status')) {
@@ -18,7 +18,7 @@ foreach ($route in @('qa-status','qa-receipt-status')) {
     if (-not $failed) { throw "Invalid identity accepted for $route." }
 }
 $unsupported = $false
-try { Invoke-Overview @('-Operation','qa-overview','-Route','qa-catalog-dry-run','-WorkflowId','create-plan-views','-DryRun') | Out-Null } catch { $unsupported = $true }
+try { Invoke-Overview @('-Operation','qa-overview','-Route','qa-catalog-dry-run','-WorkflowId','unsupported','-DryRun') | Out-Null } catch { $unsupported = $true }
 if (-not $unsupported) { throw 'Unsupported workflow accepted.' }
 $invalidOperation = $false
 try { & powershell -NoProfile -NonInteractive -ExecutionPolicy Bypass -File $cli -Operation qa-overview -Route qa-unknown 2>$null | Out-Null; if ($LASTEXITCODE -ne 0) { $invalidOperation = $true } } catch { $invalidOperation = $true }
